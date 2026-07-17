@@ -17,6 +17,7 @@ from langgraph.graph import END, START, StateGraph, add_messages
 
 from app import prompts, store
 from app.router import route_turn, merged_conditions
+from app.safety import run_safety
 from app.tools import calc_annual_cost, match_overlap, search_funds
 
 load_dotenv()
@@ -50,6 +51,7 @@ class ExploreState(TypedDict, total=False):
     action_reason: str
     ask_streak: int
     route: dict                    # RouteResult dump (행동 노드가 참조)
+    draft_answer: str              # 행동 노드의 응답 초안 — postprocess가 안전 처리 후 확정
     # 시연용 trace — TraceEntry {"node","kind","summary","detail"} (04 6-2)
     trace: Annotated[list, operator.add]
     # 턴 결과 (postprocess가 조립 — 04 6-3 AgentTurnResult의 원천)
@@ -144,7 +146,7 @@ def explain_node(state: ExploreState):
         {"용어사전": None, "안내": "사전에 없음 — 일반적인 설명임을 밝힐 것"}
     answer = _generate(state, prompts.EXPLAIN_INSTRUCTION, context)
     return {
-        "messages": [AIMessage(content=answer)],
+        "draft_answer": answer,
         "explained_terms": [entry["term"]] if entry else [],
         "trace": [_t("explain", "tool",
                      f"용어 사전 매칭: {entry['term'] if entry else '없음(일반 지식)'}",
@@ -167,7 +169,7 @@ def ask_node(state: ExploreState):
     answer = _generate(state, prompts.ASK_INSTRUCTION,
                        {"확인할 항목": slot_desc, "이미 확인된 조건": conditions})
     return {
-        "messages": [AIMessage(content=answer)],
+        "draft_answer": answer,
         "ask_streak": state.get("ask_streak", 0) + 1,
         "trace": [_t("ask", "info", f"미확보 조건 질문: {slot_key}",
                      {"slot": slot_key, "ask_streak": state.get("ask_streak", 0) + 1})],
@@ -186,9 +188,11 @@ def search_node(state: ExploreState):
                "candidates": cards}
     # 비용 환산: 비용 민감 + 납입 정보가 있으면 1위 후보 기준으로 계산해 제공 (01 4-6)
     contrib = state["profile"].get("investment_context", {}).get("contribution", {})
+    cost_note = None
     if cards and conditions.get("cost_sensitive") and contrib.get("amount"):
-        context["비용환산(그대로 인용할 것)"] = calc_annual_cost(
+        cost_note = calc_annual_cost(
             cards[0]["fee_pct"], contrib["amount"], contrib.get("type", "lumpsum"))
+        context["비용환산(그대로 인용할 것)"] = cost_note
     answer = _generate(state, prompts.SEARCH_INSTRUCTION, context)
     trace = [_t("search", "tool",
                 f"search_funds: 풀 {result['pool_size']}건 → 후보 {len(cards)}개"
@@ -198,12 +202,13 @@ def search_node(state: ExploreState):
                  "excluded_by_risk": result["excluded_by_risk"], "blocked": result["blocked"],
                  "codes": [c["fund_code"] for c in cards]})]
     return {
-        "messages": [AIMessage(content=answer)],
+        "draft_answer": answer,
         "seen_funds": [c["fund_code"] for c in cards],
         "last_candidates": cards,
         "ask_streak": 0,
         "trace": trace,
         "turn": {"candidates": cards,
+                 "numeric_note": cost_note,
                  "risk_block": ({"excluded_by_risk": result["excluded_by_risk"],
                                  "blocked": result["blocked"]}
                                 if result["excluded_by_risk"] or result["blocked"] else None)},
@@ -258,14 +263,14 @@ def compare_node(state: ExploreState):
     context = {"comparison": comparison, "overlap": overlap_for_llm}
     answer = _generate(state, prompts.COMPARE_INSTRUCTION, context)
     return {
-        "messages": [AIMessage(content=answer)],
+        "draft_answer": answer,
         "trace": trace,
         "turn": {"comparison": comparison, "overlap": overlap},
     }
 
 
 def postprocess_node(state: ExploreState):
-    """A5 범위: 후속 칩(규칙 기반) + 턴 결과 조립. 금칙·수치·고지(02 §7-2)는 A6에서 결합."""
+    """출력 가드레일(02 §7-2) + 후속 칩 + 턴 결과 확정. 최종 메시지는 여기서만 만든다."""
     action = state.get("action")
     turn = dict(state.get("turn") or {})
     risk_block = turn.get("risk_block")
@@ -284,17 +289,22 @@ def postprocess_node(state: ExploreState):
     else:  # compare
         chips = ["보유상품과 겹침 확인하기", "다른 후보 더 보기", "조건 바꿔서 다시 찾기"]
 
-    answer = state["messages"][-1].content if state.get("messages") else ""
+    answer, report = run_safety(state.get("draft_answer", ""), turn)
     turn.update({
         "answer": answer,
         "action": action,
         "action_reason": state.get("action_reason", ""),
         "conditions": state.get("conditions", {}),
         "chips": chips,
+        "safety": report,
     })
-    return {"turn": turn,
-            "trace": [_t("postprocess", "safety",
-                         "후속 칩 생성 (금칙·수치 검사는 A6에서 활성화)", {"chips": chips})]}
+    summary = (f"안전 점검: 금칙 치환 {len(report['banned'])}건, "
+               f"수치 교정 {len(report['numeric'])}건, "
+               f"안내 {report['notices'] or '해당 없음'}, 고지 {len(report['disclosures'])}건")
+    return {"messages": [AIMessage(content=answer)],
+            "turn": turn,
+            "trace": [_t("postprocess", "safety", summary,
+                         {**report, "chips": chips})]}
 
 
 def build_graph():
