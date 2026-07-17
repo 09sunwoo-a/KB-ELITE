@@ -73,6 +73,11 @@ def route_turn(user_message: str, *, conditions: dict | None = None,
     ])
 
     overrides = []
+    # 규칙 ③ — 겹침 요청은 무조건 compare (LLM이 search로 흘려도 코드가 보정)
+    if result.overlap_request and last_candidates and result.action != "compare":
+        result.action = "compare"
+        result.action_reason = "보유하신 종목과 후보의 공개 보유종목이 겹치는지 확인해 볼게요."
+        overrides.append("overlap_request → compare")
     # 규칙 ① — 연속 질문 2턴 제한 (01 5-4 규칙 5)
     if result.action == "ask" and ask_streak >= 2:
         result.action = "search"

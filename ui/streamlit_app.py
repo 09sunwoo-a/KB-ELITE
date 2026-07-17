@@ -11,6 +11,7 @@ import uuid
 from pathlib import Path
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 sys.path.insert(0, str(Path(__file__).parent))
 
@@ -19,7 +20,7 @@ from mock_fixtures import (  # noqa: E402
     COURSE_1, COURSE_2, COURSE_3, COURSE_4,
     PERSONA_ORDER, PERSONAS, RISK_GRADE_BY_SCORE,
 )
-from styles import CSS, mode_badge_html  # noqa: E402
+from styles import AUTOSCROLL_JS, CSS, mode_badge_html  # noqa: E402
 
 ASSETS_DIR = Path(__file__).parent.parent / "assets"
 
@@ -42,6 +43,7 @@ COND_LABELS = {
     "fund_type_hint": lambda v: f"유형: {v}",
 }
 
+CHAT_SCROLL_HEIGHT = 440
 TYPEWRITER_CHARS_PER_TICK = 3
 TYPEWRITER_TICK_SEC = 0.014
 
@@ -214,7 +216,7 @@ def render_fund_home():
 
 
 # ---------------------------------------------------------------------------
-# 화면 2 — Chat UI (04 §2 화면 2, §4)
+# 화면 2 — Chat UI, 폰 프레임 안에서 진행 (04 §2 화면 2, §4)
 # ---------------------------------------------------------------------------
 
 def bubble_html(role: str, text: str, cursor: bool = False) -> str:
@@ -237,24 +239,24 @@ def typing_html(label: str) -> str:
     )
 
 
-def render_chat_header():
+def chatbar_html() -> str:
+    """대화 헤더 + 고객 컨텍스트 서브라인 (04 §4-0 프로필 스트립)."""
     persona = PERSONAS[st.session_state.persona_id]
     cap = RISK_GRADE_BY_SCORE[persona["max_risk_score"]]
-    st.markdown(
-        f"""
-        <div class="chat-head">
-          <div class="chat-title">🧭 AI 펀드 길잡이</div>
-          {mode_badge_html(st.session_state.agent_mode)}
-        </div>
-        <div class="profile-strip">
-          <span class="pname">{persona["name"]}님</span>
-          <span class="ptag">{persona["risk_profile"]}</span>
-          <span class="pcap">가입 가능 위험등급: {cap}까지</span>
-          <span class="pnote">투자성향을 넘는 상품은 후보로 노출되지 않아요</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    return f"""
+    <div class="chatbar">
+      <div class="phone-notch"></div>
+      <div class="cb-row">
+        <span class="cb-back">‹</span>
+        <span class="cb-avatar">🧭</span>
+        <div class="cb-title">AI 펀드 길잡이<br><small>● 온라인</small></div>
+      </div>
+      <div class="cb-sub">
+        <b>{persona["name"]}님</b> · {persona["risk_profile"]} ·
+        <b>{cap}</b>까지 노출 — 투자성향을 넘는 상품은 후보로 노출되지 않아요
+      </div>
+    </div>
+    """
 
 
 def render_condition_bar():
@@ -293,18 +295,21 @@ def render_chips(message, msg_idx):
     chips = message.get("chips") or []
     if not chips:
         return
-    cols = st.columns(len(chips))
-    for i, (col, chip) in enumerate(zip(cols, chips)):
-        with col:
-            if st.button(chip, key=f"chip_{msg_idx}_{i}", use_container_width=True):
-                st.session_state.pending_prompt = chip
-                st.rerun()
+    selected = st.pills(
+        "빠른 시작", chips, selection_mode="single",
+        key=f"chips_{msg_idx}", label_visibility="collapsed",
+    )
+    if selected:
+        st.session_state.pending_prompt = selected
+        st.rerun()
 
 
-def run_turn(chat_area, prompt):
+def run_turn(scroll_area, prompt):
+    """사용자 말풍선 표시 → 노드 진행(타이핑 인디케이터) → 답변 타자기 연출."""
     adapter = create_adapter(st.session_state.agent_mode)
     result = None
-    with chat_area:
+    with scroll_area:
+        st.markdown(bubble_html("user", prompt), unsafe_allow_html=True)
         placeholder = st.empty()
         try:
             for event in adapter.stream_turn(
@@ -368,40 +373,47 @@ def render_chat():
         return
 
     if st.session_state.trace_visible:
-        chat_col, trace_col = st.columns([2.1, 1.0])
+        chat_col, trace_col = st.columns([1.6, 1.0])
         with trace_col:
             st.markdown(mode_badge_html(st.session_state.agent_mode), unsafe_allow_html=True)
             st.caption("Agent 동작 패널은 B3 단계에서 구현됩니다.")
     else:
-        _, chat_col, _ = st.columns([0.4, 2.2, 0.4])
+        chat_col = st.container()
+
+    prompt = st.session_state.pop("pending_prompt", None)
 
     with chat_col:
-        render_chat_header()
-        render_condition_bar()
+        with st.container(key="chat_phone"):
+            st.markdown(chatbar_html(), unsafe_allow_html=True)
+            render_condition_bar()
 
-        prompt = st.session_state.pop("pending_prompt", None)
-        typed = st.chat_input("궁금한 점을 편하게 물어보세요")
-        if typed:
-            prompt = typed
+            scroll_area = st.container(height=CHAT_SCROLL_HEIGHT, key="chat_scroll")
+            with scroll_area:
+                messages = st.session_state.messages
+                for idx, msg in enumerate(messages):
+                    st.markdown(bubble_html(msg["role"], msg["content"]), unsafe_allow_html=True)
+                    if msg["role"] == "assistant":
+                        render_result_placeholders(msg.get("result"))
 
-        if prompt:
-            st.session_state.messages.append({"role": "user", "content": prompt})
+            # 빠른 시작/후속 칩 — 입력창 위 (진행 중이면 숨김)
+            messages = st.session_state.messages
+            if messages and messages[-1]["role"] == "assistant" and not prompt:
+                render_chips(messages[-1], len(messages) - 1)
 
-        messages = st.session_state.messages
-        for idx, msg in enumerate(messages):
-            st.markdown(bubble_html(msg["role"], msg["content"]), unsafe_allow_html=True)
-            if msg["role"] == "assistant":
-                render_result_placeholders(msg.get("result"))
-            # 마지막 assistant 메시지에만 후속 칩 표시 (진행 중이면 숨김)
-            if (
-                msg["role"] == "assistant"
-                and idx == len(messages) - 1
-                and not prompt
-            ):
-                render_chips(msg, idx)
+            typed = st.chat_input("궁금한 점을 편하게 물어보세요")
+            if typed:
+                prompt = typed
+
+        st.markdown(
+            f"<div style='text-align:center; margin-top:6px'>{mode_badge_html(st.session_state.agent_mode)}"
+            "<span style='color:#9a927e; font-size:0.72rem; margin-left:8px'>Prototype · 시연용</span></div>",
+            unsafe_allow_html=True,
+        )
+        components.html(AUTOSCROLL_JS, height=0)
 
     if prompt:
-        run_turn(chat_col, prompt)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        run_turn(scroll_area, prompt)
 
 
 # ---------------------------------------------------------------------------

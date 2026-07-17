@@ -25,7 +25,7 @@ CSS = """
   width: 434px; margin: 0 auto; background: #F9F7F1;
   border: 10px solid #1f1f1f; border-radius: 44px;
   box-shadow: 0 18px 44px rgba(0,0,0,.22);
-  padding: 0 10px 12px; gap: 0.4rem;
+  padding: 0 10px 12px; gap: 0.4rem; overflow: hidden;
 }
 
 /* 대화 헤더 */
@@ -101,15 +101,16 @@ CSS = """
   border-radius: 999px; padding: 1px 9px; margin: 1px 2px; color: #4a4437;
 }
 
-/* ---- 후속 칩(빠른 시작) 버튼 ---- */
-div[class*="st-key-chip_"] button {
-  border-radius: 999px; background: #fff; border: 1px solid #E4DCC8;
-  color: #5a4a00; font-size: 0.76rem; padding: 5px 10px; min-height: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04); white-space: normal; line-height: 1.3;
+/* ---- 후속 칩(빠른 시작) — st.pills ---- */
+div[class*="st-key-chips_"] button {
+  border-radius: 999px !important; background: #fff; border: 1px solid #E4DCC8;
+  color: #5a4a00 !important; font-size: 0.78rem; padding: 3px 12px; min-height: 0;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
 }
-div[class*="st-key-chip_"] button:hover {
-  border-color: #FFCC00; background: #FFFBEB; color: #3d3200;
+div[class*="st-key-chips_"] button:hover {
+  border-color: #FFCC00; background: #FFFBEB;
 }
+div[class*="st-key-chips_"] button p { font-size: 0.78rem !important; }
 
 /* ---- 입력창 (프레임 하단 인라인) ---- */
 .st-key-chat_phone [data-testid="stChatInput"] {
