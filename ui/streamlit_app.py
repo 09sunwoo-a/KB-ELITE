@@ -11,10 +11,11 @@ import uuid
 from pathlib import Path
 
 import streamlit as st
-import streamlit.components.v1 as components
+import streamlit.components.v1 as st_components
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import components  # noqa: E402
 from adapter import AdapterConnectionError, create_adapter, default_mode  # noqa: E402
 from mock_fixtures import (  # noqa: E402
     COURSE_1, COURSE_2, COURSE_3, COURSE_4,
@@ -32,15 +33,6 @@ NODE_PROGRESS = {
     "search": "관련 펀드를 찾고 있어요",
     "compare": "후보 상품을 비교하고 있어요",
     "postprocess": "표현과 수치를 점검하고 있어요",
-}
-
-# 조건 키 → 고객 언어 라벨 (04 §4-2)
-COND_LABELS = {
-    "target_stock": lambda v: f"관심 종목: {v}",
-    "cost_sensitive": lambda v: "비용: 낮은 편" if v else None,
-    "region_theme": lambda v: f"테마·지역: {v}",
-    "horizon": lambda v: f"기간: {v}",
-    "fund_type_hint": lambda v: f"유형: {v}",
 }
 
 CHAT_SCROLL_HEIGHT = 440
@@ -255,39 +247,6 @@ def chatbar_html() -> str:
     """
 
 
-def render_condition_bar():
-    """조건이 없으면 내용은 숨기되 자리는 유지한다(프레임 규격 고정)."""
-    conds = st.session_state.conditions
-    chips = []
-    for key, value in conds.items():
-        fmt = COND_LABELS.get(key)
-        label = fmt(value) if fmt else f"{key}: {value}"
-        if label:
-            chips.append(f'<span class="cond-chip">{label}</span>')
-    empty = "" if chips else " empty"
-    st.markdown(
-        f'<div class="cond-bar{empty}"><span class="cond-title">현재 탐색 기준</span>{"".join(chips)}</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def render_result_placeholders(result):
-    """B2에서 카드·비교표·겹침·차단 박스 컴포넌트로 대체된다."""
-    if not result:
-        return
-    notes = []
-    if result.get("candidates"):
-        notes.append(f"후보 카드 {len(result['candidates'])}건")
-    if result.get("comparison"):
-        notes.append(f"비교표 {len(result['comparison']['rows'])}행")
-    if result.get("overlap"):
-        notes.append("겹침 분석 결과")
-    if result.get("risk_block") and result["risk_block"].get("blocked"):
-        notes.append("성향 초과 차단 안내 박스")
-    if notes:
-        st.caption("🧩 " + " · ".join(notes) + " — 렌더링은 B2 단계에서 추가됩니다")
-
-
 def render_chips(message, msg_idx):
     chips = message.get("chips") or []
     if not chips:
@@ -337,6 +296,7 @@ def run_turn(scroll_area, prompt):
                                  unsafe_allow_html=True)
             time.sleep(TYPEWRITER_TICK_SEC)
         placeholder.markdown(bubble_html("assistant", answer), unsafe_allow_html=True)
+        components.render_result(result)   # 카드·비교표·겹침·차단 박스 (04 §4-4~4-7)
 
     st.session_state.messages.append({
         "role": "assistant",
@@ -379,7 +339,7 @@ def render_chat():
     with chat_col:
         with st.container(key="chat_phone"):
             st.markdown(chatbar_html(), unsafe_allow_html=True)
-            render_condition_bar()
+            components.render_condition_bar(st.session_state.conditions)
 
             scroll_area = st.container(height=CHAT_SCROLL_HEIGHT, key="chat_scroll")
             with scroll_area:
@@ -387,7 +347,7 @@ def render_chat():
                 for idx, msg in enumerate(messages):
                     st.markdown(bubble_html(msg["role"], msg["content"]), unsafe_allow_html=True)
                     if msg["role"] == "assistant":
-                        render_result_placeholders(msg.get("result"))
+                        components.render_result(msg.get("result"))
                 # 빠른 시작/후속 칩 — 대화 흐름 안, 마지막 말풍선 아래 (진행 중이면 숨김)
                 if messages and messages[-1]["role"] == "assistant" and not prompt:
                     render_chips(messages[-1], len(messages) - 1)
@@ -401,7 +361,8 @@ def render_chat():
             "<span style='color:#9a927e; font-size:0.72rem; margin-left:8px'>Prototype · 시연용</span></div>",
             unsafe_allow_html=True,
         )
-        components.html(AUTOSCROLL_JS, height=0)
+        # nonce로 매 rerun마다 스크립트를 재마운트시킨다 (같은 내용이면 재실행 안 됨)
+        st_components.html(AUTOSCROLL_JS + f"<!-- {uuid.uuid4()} -->", height=0)
 
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})

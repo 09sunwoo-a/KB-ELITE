@@ -117,6 +117,62 @@ div[class*="st-key-chip_"] button:hover {{
 }}
 div[class*="st-key-chip_"] button p {{ font-size: 0.78rem !important; color: #0A84FF; }}
 
+/* ---- 후보 카드 (04 §4-4) ---- */
+.fund-card {{
+  background: #fff; border: 1px solid #E3E3E8; border-radius: 14px;
+  padding: 10px 12px; margin: 4px 0; max-width: 90%;
+  box-shadow: 0 1px 4px rgba(0,0,0,.05);
+}}
+.fund-card .fc-name {{ font-weight: 700; font-size: 0.8rem; color: #1c1c1e; line-height: 1.45; }}
+.fc-tags {{ margin: 5px 0 6px; }}
+.fc-tag {{
+  display: inline-block; font-size: 0.66rem; border-radius: 6px;
+  padding: 1px 7px; margin: 1px 4px 1px 0; background: #F1F1F3; color: #48484A;
+}}
+.fc-tag.risk {{ background: #FFF4E5; color: #9a5b00; }}
+.fc-tag.match {{ background: #E8F5E9; color: #1b7a2f; font-weight: 600; }}
+.fc-row {{ display: flex; justify-content: space-between; gap: 10px; font-size: 0.76rem; padding: 2px 0; }}
+.fc-row .k {{ color: #8E8E93; flex: 0 0 auto; }}
+.fc-row .v {{ color: #1c1c1e; text-align: right; }}
+.fc-row .fc-dim {{ color: #AEAEB2; font-size: 0.66rem; }}
+.fc-foot {{ font-size: 0.66rem; color: #AEAEB2; margin-top: 5px; }}
+.excl-note {{ font-size: 0.7rem; color: #9a8a4a; margin: 2px 0 4px; }}
+
+/* ---- 비교표 (04 §4-5) ---- */
+.cmp-wrap {{
+  background: #fff; border: 1px solid #E3E3E8; border-radius: 12px;
+  overflow: hidden; margin: 4px 0; max-width: 96%;
+}}
+.cmp-wrap table {{ width: 100%; border-collapse: collapse; font-size: 0.7rem; }}
+.cmp-wrap td {{
+  padding: 6px 8px; border-bottom: 1px solid #F1F1F3;
+  vertical-align: top; text-align: left; color: #1c1c1e; line-height: 1.45;
+}}
+.cmp-wrap tr:last-child td {{ border-bottom: none; }}
+.cmp-wrap td.lbl {{ color: #8E8E93; white-space: nowrap; width: 84px; background: #FAFAFC; }}
+
+/* ---- 겹침 분석 (04 §4-6) ---- */
+.overlap-box {{
+  background: #fff; border: 1px solid #E3E3E8; border-radius: 14px;
+  padding: 10px 12px; margin: 4px 0; max-width: 90%; font-size: 0.78rem; color: #1c1c1e;
+}}
+.overlap-box .ov-title {{ font-weight: 700; font-size: 0.78rem; line-height: 1.45; }}
+.overlap-box .ov-sub {{ font-size: 0.68rem; color: #8E8E93; margin: 2px 0 6px; }}
+.ov-stock {{
+  display: inline-block; background: #E8F5E9; color: #1b7a2f; border-radius: 999px;
+  padding: 2px 10px; font-size: 0.74rem; font-weight: 600; margin: 2px 4px 2px 0;
+}}
+.ov-none {{ font-size: 0.74rem; color: #8E8E93; }}
+.ov-note {{ font-size: 0.66rem; color: #AEAEB2; margin-top: 6px; line-height: 1.5; }}
+
+/* ---- 성향 초과 차단 안내 박스 (04 §4-7) ---- */
+.block-box {{
+  background: #FFF8E6; border: 1px solid #F5D98B; border-radius: 14px;
+  padding: 10px 12px; margin: 4px 0; max-width: 90%;
+  font-size: 0.78rem; color: #7a5c00; line-height: 1.6;
+}}
+.block-box b {{ color: #5a4400; }}
+
 /* ---- 입력창 (프레임 하단 고정) ---- */
 .st-key-chat_phone [data-testid="stChatInput"] {{
   background: #F1F1F3; border: 1px solid #E3E3E8; border-radius: 22px;

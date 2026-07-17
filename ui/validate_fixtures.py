@@ -27,10 +27,11 @@ RESULT_SCHEMA = {
     "trace": list,
 }
 
-# 04 §6-3 후보 카드 스키마 (정확히 이 키 집합)
+# 04 §6-3 후보 카드 스키마 (정확히 이 키 집합 — 2026-07-18 확장 반영)
 CARD_KEYS = {
     "fund_code", "name", "fund_type", "region", "risk_grade",
-    "fee_pct", "matched_stocks", "returns_display", "selection_reason", "as_of",
+    "fee_pct", "manager", "matched_stocks", "top_stocks_summary",
+    "returns_display", "selection_reason", "as_of",
 }
 
 TRACE_NODES = {"router", "explain", "ask", "search", "compare", "postprocess"}
@@ -99,9 +100,13 @@ def cross_check_funds(tag, r, funds):
         f = funds.get(card["fund_code"])
         check(f is not None, f"[{tag}] 카드{i} fund_code가 funds.json에 존재", card["fund_code"])
         if f:
-            for field in ("name", "fund_type", "region", "risk_grade", "fee_pct", "as_of"):
+            for field in ("name", "fund_type", "region", "risk_grade", "fee_pct", "manager", "as_of"):
                 check(card[field] == f[field], f"[{tag}] 카드{i} {field} == funds.json",
                       f"fixture={card[field]!r} data={f[field]!r}")
+            rd = card.get("returns_display")
+            if rd:
+                check(rd["value"] == f["returns"]["m12"], f"[{tag}] 카드{i} 12개월 수익률 == funds.json",
+                      f"fixture={rd['value']} data={f['returns']['m12']}")
     ov = r.get("overlap")
     if ov and ov.get("available"):
         f = funds.get(ov["fund_code"])
