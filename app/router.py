@@ -7,6 +7,7 @@ LLM 판단 위에 코드 오버라이드 규칙(01 5-4)을 적용한다:
 
 from __future__ import annotations
 
+import re
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
@@ -51,6 +52,23 @@ def _get_llm():
 _CONDITION_KEYS = ["region_theme", "target_stock", "loss_tolerance",
                    "horizon", "fund_type_hint", "cost_sensitive"]
 
+# fund_type_hint 코드 검증 — 마지막 발화에 근거 토큰이 있을 때만 유지 (LLM의 history 오추출 차단)
+_HINT_GUARDS = [
+    (re.compile(r"월지급|인컴|배당|분배"),
+     re.compile(r"월지급|인컴|배당|분배|돈이 나오|돈 나오|매달 받|매월 받|용돈")),
+    (re.compile(r"TDF", re.I), re.compile(r"TDF|티디에프", re.I)),
+    (re.compile(r"연금|IRP|적격"), re.compile(r"연금|IRP|적격|퇴직|노후")),
+]
+
+
+def _hint_supported(hint: str, utterance: str) -> bool:
+    for hint_pat, utt_pat in _HINT_GUARDS:
+        if hint_pat.search(hint):
+            return bool(utt_pat.search(utterance))
+    # 그 외(주식형·채권형 등)는 힌트의 핵심 토큰이 발화에 있어야 함
+    tokens = re.findall(r"[가-힣A-Za-z]{2,}", hint)
+    return any(t in utterance for t in tokens) if tokens else False
+
 
 def route_turn(user_message: str, *, conditions: dict | None = None,
                ask_streak: int = 0, last_candidates: list | None = None,
@@ -73,6 +91,10 @@ def route_turn(user_message: str, *, conditions: dict | None = None,
     ])
 
     overrides = []
+    # 규칙 ④ — fund_type_hint는 마지막 발화에 근거가 있어야 유지
+    if result.fund_type_hint and not _hint_supported(result.fund_type_hint, user_message):
+        overrides.append(f"fund_type_hint '{result.fund_type_hint}' 발화 근거 없음 → 제거")
+        result.fund_type_hint = None
     # 규칙 ③ — 겹침 요청은 무조건 compare (LLM이 search로 흘려도 코드가 보정)
     if result.overlap_request and last_candidates and result.action != "compare":
         result.action = "compare"

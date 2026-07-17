@@ -127,6 +127,8 @@ def router_node(state: ExploreState):
         "action_reason": result.action_reason,
         "conditions": conditions,
         "route": dump,
+        "turn": {},   # 매 턴 리셋 — 직전 턴의 risk_block·후보가 잔존하지 않게
+        "draft_answer": "",
         "trace": [_t("router", "route",
                      f"행동 선택: {result.action.upper()} — {result.action_reason}",
                      {"extracted": extracted, "overrides": overrides,
@@ -137,16 +139,19 @@ def router_node(state: ExploreState):
 def explain_node(state: ExploreState):
     route = state.get("route", {})
     query = (route.get("term_to_explain") or "") + " " + _last_user_message(state)
-    entry = None
+    # 최장 일치 우선 — '펀드' 같은 일반어가 '원금이 보장' 같은 구체 표현을 가리지 않게
+    entry, best_len = None, 0
     for t in store.terms():
-        if t["term"] in query or any(a in query for a in t["aliases"]):
-            entry = t
-            break
+        for key in [t["term"], *t["aliases"]]:
+            if key in query and len(key) > best_len:
+                entry, best_len = t, len(key)
     context = {"용어사전": entry} if entry else \
         {"용어사전": None, "안내": "사전에 없음 — 일반적인 설명임을 밝힐 것"}
     answer = _generate(state, prompts.EXPLAIN_INSTRUCTION, context)
     return {
         "draft_answer": answer,
+        "turn": {"explained_term": entry["term"] if entry else None,
+                 "explain_chip": (entry or {}).get("explore_chip")},
         "explained_terms": [entry["term"]] if entry else [],
         "trace": [_t("explain", "tool",
                      f"용어 사전 매칭: {entry['term'] if entry else '없음(일반 지식)'}",
@@ -170,6 +175,7 @@ def ask_node(state: ExploreState):
                        {"확인할 항목": slot_desc, "이미 확인된 조건": conditions})
     return {
         "draft_answer": answer,
+        "turn": {"asked_slot": slot_key},
         "ask_streak": state.get("ask_streak", 0) + 1,
         "trace": [_t("ask", "info", f"미확보 조건 질문: {slot_key}",
                      {"slot": slot_key, "ask_streak": state.get("ask_streak", 0) + 1})],
@@ -276,18 +282,29 @@ def postprocess_node(state: ExploreState):
     risk_block = turn.get("risk_block")
     cands = state.get("last_candidates", [])
 
+    has_holdings = bool(state["profile"].get("holdings"))
     if risk_block and risk_block.get("blocked"):
         chips = ["가입 가능한 범위에서 찾아보기", "이전 후보로 돌아가기"]
     elif action == "search" and cands:
         chips = ["1번 자세히 보기",
-                 "1번과 2번 비교하기" if len(cands) >= 2 else "조건 바꿔서 다시 찾기",
-                 "보유상품과 겹침 확인하기" if state["profile"].get("holdings") else "조건 바꿔서 다시 찾기"]
+                 f"1번과 {len(cands)}번 비교하기" if len(cands) >= 2 else "조건 바꿔서 다시 찾기",
+                 "보유상품과 겹침 확인하기" if has_holdings else "조건 바꿔서 다시 찾기"]
     elif action == "explain":
-        chips = ["관련 상품 살펴보기", "다른 용어 물어보기", "조건으로 찾아보기"]
+        # 설명한 용어와 연계된 탐색 칩 (terms.json explore_chip, 없으면 일반 칩)
+        chips = [turn.get("explain_chip") or "관련 상품 살펴보기",
+                 "다른 용어 물어보기",
+                 "보유상품과 비교하기" if has_holdings else "조건으로 찾아보기"]
     elif action == "ask":
-        chips = ["잘 모르겠어요", "이 조건은 건너뛸게요", "처음부터 다시 정할래요"]
+        # 방금 물어본 슬롯의 답변 선택지 — 클릭만으로 대화가 진행되게
+        chips = {
+            "horizon": ["1~2년 안에 쓸 수도 있어요", "5년 이상 여유 있어요", "잘 모르겠어요"],
+            "loss_tolerance": ["큰 변동은 피하고 싶어요", "어느 정도 변동은 괜찮아요", "잘 모르겠어요"],
+            "region_theme": ["미국 위주로 볼래요", "국내 위주로 볼래요", "넓게 다 볼래요"],
+        }.get(turn.get("asked_slot"), ["잘 모르겠어요", "이 조건은 건너뛸게요", "처음부터 다시 정할래요"])
     else:  # compare
-        chips = ["보유상품과 겹침 확인하기", "다른 후보 더 보기", "조건 바꿔서 다시 찾기"]
+        overlap_done = bool(turn.get("overlap"))
+        chips = ["보유상품과 겹침 확인하기" if has_holdings and not overlap_done else "다른 후보 더 보기",
+                 "1번 자세히 보기", "조건 바꿔서 다시 찾기"]
 
     answer, report = run_safety(state.get("draft_answer", ""), turn)
     turn.update({

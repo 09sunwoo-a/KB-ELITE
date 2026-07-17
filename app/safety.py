@@ -26,9 +26,10 @@ _JUDGEMENT_REPLACEMENTS = [
 # 수익 보장·오인형: 문장 자체가 위험 → 해당 문장을 안전 문장으로 교체
 #   (부정형 "보장되지 않아요", "없어지는 것은 아니에요"는 정상 표현이므로 lookahead로 제외)
 _GUARANTEE_PATTERNS = [
-    re.compile(r"원금[이을]?\s?보장(?!되지|되진|이 되지|되는 것은 아니|이 안 되)"),
-    re.compile(r"손실[이은]?\s?(전혀\s?)?없(?!어지는 것은 아니|어지지는 않|다고 단정할 수 없)"),
-    re.compile(r"확정 수익|수익[이을]?\s?보장(?!하지 않|되지 않|되진 않|이 되지 않)|반드시 오르|무조건 오른"),
+    # 단정형 어미가 붙은 보장 '주장'만 잡는다 — 부정형·개념 인용("'원금 보장'과 다르다")은 정상 표현
+    re.compile(r"원금[이을]?\s?보장[이]?\s?(됩니다|돼요|되는 상품|되어 있|된다|해\s?드리|해\s?드립)"),
+    re.compile(r"손실[이은]?\s?(전혀\s?)?없(습니다|어요|는 상품)"),
+    re.compile(r"확정 수익|수익[이을]?\s?보장(합니다|됩니다|돼요|되는 상품)|반드시 오르|무조건 오른"),
 ]
 _GUARANTEE_SAFE_SENTENCE = ("펀드는 예금과 달리 원금 손실이 발생할 수 있고, "
                             "수익이 보장되지 않아요.")
@@ -73,6 +74,8 @@ def check_banned(text: str) -> tuple[str, list[dict]]:
         if hit:
             log.append({"category": "수익보장·오인형", "found": s.strip(),
                         "replaced": _GUARANTEE_SAFE_SENTENCE})
+            if out and out[-1] == _GUARANTEE_SAFE_SENTENCE:
+                continue  # 안전 문장 중복 방지
             out.append(_GUARANTEE_SAFE_SENTENCE)
         else:
             out.append(s)
