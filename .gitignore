@@ -16,4 +16,19 @@ __pycache__/
 # 개인 문서 (커밋 제외)
 이선우_3901317*.pdf
 
-# 빌드 산출물은 커밋한다 — Streamlit Cloud 배포 시 서버에서 재빌드하지 않기 위함 (05 J1.5)
+# 빌드 산출물(data/*.json, embeddings.npy)은 커밋한다 — Streamlit Cloud 배포 시 서버에서 재빌드하지 않기 위함 (05 J1.5)
+
+# ── 배포 저장소에서 제외: 앱 구동에 불필요 (로컬에는 보존) ──
+# 문서 (루트 .md 전부 — 나중에 README.md 추가 시 예외 처리 필요)
+/*.md
+docs/
+# 개발/테스트 스크립트
+tests/
+ui/check_*.py
+ui/validate_fixtures.py
+app/cli.py
+# 데이터 재현용 원본·빌드 도구 (배포엔 이미 빌드된 data/ 사용)
+build_data.py
+data/raw/
+# 스크린샷
+KakaoTalk_Photo_*.png
