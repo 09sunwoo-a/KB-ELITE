@@ -377,6 +377,12 @@ def get_fixture(user_message: str) -> dict:
 
 PERSONA_ORDER = ["P3", "P4", "P2", "P1"]  # 사이드바 순서 (04 §3)
 
+# risk_score → 위험등급 텍스트 (03 §4). 노출 상한 표시(04 §4-0)에 사용.
+RISK_GRADE_BY_SCORE = {
+    1: "매우낮은위험", 2: "낮은위험", 3: "보통위험",
+    4: "다소높은위험", 5: "높은위험", 6: "매우높은위험",
+}
+
 PERSONAS = {
     "P3": {
         "name": "최준혁",

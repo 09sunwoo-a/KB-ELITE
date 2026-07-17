@@ -4,7 +4,9 @@
 실행: streamlit run ui/streamlit_app.py
 """
 import base64
+import html as html_mod
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -13,7 +15,10 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent))
 
 from adapter import AdapterConnectionError, create_adapter, default_mode  # noqa: E402
-from mock_fixtures import COURSE_1, COURSE_2, COURSE_3, COURSE_4, PERSONA_ORDER, PERSONAS  # noqa: E402
+from mock_fixtures import (  # noqa: E402
+    COURSE_1, COURSE_2, COURSE_3, COURSE_4,
+    PERSONA_ORDER, PERSONAS, RISK_GRADE_BY_SCORE,
+)
 from styles import CSS, mode_badge_html  # noqa: E402
 
 ASSETS_DIR = Path(__file__).parent.parent / "assets"
@@ -36,6 +41,9 @@ COND_LABELS = {
     "horizon": lambda v: f"기간: {v}",
     "fund_type_hint": lambda v: f"유형: {v}",
 }
+
+TYPEWRITER_CHARS_PER_TICK = 3
+TYPEWRITER_TICK_SEC = 0.014
 
 
 # ---------------------------------------------------------------------------
@@ -209,6 +217,46 @@ def render_fund_home():
 # 화면 2 — Chat UI (04 §2 화면 2, §4)
 # ---------------------------------------------------------------------------
 
+def bubble_html(role: str, text: str, cursor: bool = False) -> str:
+    safe = html_mod.escape(text).replace("\n", "<br>")
+    if cursor:
+        safe += '<span class="cursor">▌</span>'
+    if role == "user":
+        return f'<div class="msg-row user"><div class="bubble user">{safe}</div></div>'
+    return (
+        '<div class="msg-row bot"><div class="avatar">🧭</div>'
+        f'<div class="bubble bot">{safe}</div></div>'
+    )
+
+
+def typing_html(label: str) -> str:
+    return (
+        '<div class="msg-row bot"><div class="avatar">🧭</div>'
+        '<div class="bubble bot typing"><span class="dots"><i></i><i></i><i></i></span>'
+        f'<span class="nlabel">{html_mod.escape(label)}…</span></div></div>'
+    )
+
+
+def render_chat_header():
+    persona = PERSONAS[st.session_state.persona_id]
+    cap = RISK_GRADE_BY_SCORE[persona["max_risk_score"]]
+    st.markdown(
+        f"""
+        <div class="chat-head">
+          <div class="chat-title">🧭 AI 펀드 길잡이</div>
+          {mode_badge_html(st.session_state.agent_mode)}
+        </div>
+        <div class="profile-strip">
+          <span class="pname">{persona["name"]}님</span>
+          <span class="ptag">{persona["risk_profile"]}</span>
+          <span class="pcap">가입 가능 위험등급: {cap}까지</span>
+          <span class="pnote">투자성향을 넘는 상품은 후보로 노출되지 않아요</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_condition_bar():
     conds = st.session_state.conditions
     chips = []
@@ -257,31 +305,40 @@ def run_turn(chat_area, prompt):
     adapter = create_adapter(st.session_state.agent_mode)
     result = None
     with chat_area:
-        with st.chat_message("assistant"):
-            progress = st.empty()
-            try:
-                for event in adapter.stream_turn(
-                    prompt, st.session_state.thread_id, st.session_state.persona_id
-                ):
-                    etype = event.get("event_type")
-                    if etype == "node_started":
-                        label = NODE_PROGRESS.get(event.get("node", ""), "처리하고 있어요")
-                        progress.markdown(f"⏳ {label}…")
-                    elif etype == "turn_completed":
-                        result = event["result"]
-                    elif etype == "turn_error":
-                        progress.empty()
-                        st.error(event.get("error", "일시적인 문제가 발생했어요. 다시 시도해 주세요."))
-                        return
-            except Exception:
-                # stack trace 노출 금지 (04 §8)
-                progress.empty()
-                st.error("일시적인 문제가 발생했어요. 잠시 후 다시 시도해 주세요.")
-                return
-            progress.empty()
+        placeholder = st.empty()
+        try:
+            for event in adapter.stream_turn(
+                prompt, st.session_state.thread_id, st.session_state.persona_id
+            ):
+                etype = event.get("event_type")
+                if etype == "node_started":
+                    label = NODE_PROGRESS.get(event.get("node", ""), "처리하고 있어요")
+                    placeholder.markdown(typing_html(label), unsafe_allow_html=True)
+                elif etype == "turn_completed":
+                    result = event["result"]
+                elif etype == "turn_error":
+                    placeholder.empty()
+                    st.error(event.get("error", "일시적인 문제가 발생했어요. 다시 시도해 주세요."))
+                    return
+        except Exception:
+            # stack trace 노출 금지 (04 §8)
+            placeholder.empty()
+            st.error("일시적인 문제가 발생했어요. 잠시 후 다시 시도해 주세요.")
+            return
 
-    if result is None:
-        return
+        if result is None:
+            placeholder.empty()
+            return
+
+        # 답변 타자기 연출 (04 조정 #6) — postprocess를 통과한 완성본을 표시
+        answer = result["answer"]
+        for end in range(TYPEWRITER_CHARS_PER_TICK, len(answer) + TYPEWRITER_CHARS_PER_TICK,
+                         TYPEWRITER_CHARS_PER_TICK):
+            placeholder.markdown(bubble_html("assistant", answer[:end], cursor=True),
+                                 unsafe_allow_html=True)
+            time.sleep(TYPEWRITER_TICK_SEC)
+        placeholder.markdown(bubble_html("assistant", answer), unsafe_allow_html=True)
+
     st.session_state.messages.append({
         "role": "assistant",
         "content": result["answer"],
@@ -316,12 +373,10 @@ def render_chat():
             st.markdown(mode_badge_html(st.session_state.agent_mode), unsafe_allow_html=True)
             st.caption("Agent 동작 패널은 B3 단계에서 구현됩니다.")
     else:
-        chat_col = st.container()
+        _, chat_col, _ = st.columns([0.4, 2.2, 0.4])
 
     with chat_col:
-        head_l, head_r = st.columns([3, 1])
-        head_l.markdown("##### 🧭 AI 펀드 길잡이")
-        head_r.markdown(mode_badge_html(st.session_state.agent_mode), unsafe_allow_html=True)
+        render_chat_header()
         render_condition_bar()
 
         prompt = st.session_state.pop("pending_prompt", None)
@@ -334,10 +389,9 @@ def render_chat():
 
         messages = st.session_state.messages
         for idx, msg in enumerate(messages):
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-                if msg["role"] == "assistant":
-                    render_result_placeholders(msg.get("result"))
+            st.markdown(bubble_html(msg["role"], msg["content"]), unsafe_allow_html=True)
+            if msg["role"] == "assistant":
+                render_result_placeholders(msg.get("result"))
             # 마지막 assistant 메시지에만 후속 칩 표시 (진행 중이면 숨김)
             if (
                 msg["role"] == "assistant"
