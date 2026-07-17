@@ -100,6 +100,10 @@ def render_comparison(comparison: dict):
     if not comparison or not comparison.get("rows"):
         return
     body = []
+    labels = comparison.get("labels")
+    if labels:
+        head = "".join(f"<td><b>{_esc(lb)}</b></td>" for lb in labels)
+        body.append(f'<tr><td class="lbl"></td>{head}</tr>')
     for row in comparison["rows"]:
         values = "".join(f"<td>{_esc(v)}</td>" for v in row["values"])
         body.append(f'<tr><td class="lbl">{_esc(row["label"])}</td>{values}</tr>')
@@ -109,13 +113,20 @@ def render_comparison(comparison: dict):
     )
 
 
-def render_overlap(overlap: dict):
-    """겹침 분석 (04 §4-6) — 종목명 리스트만. 비중 막대·중복률 % 금지(데이터 없음)."""
+def render_overlap(overlap):
+    """겹침 분석 (04 §4-6) — 펀드별 항목 리스트. 비중 막대·중복률 % 금지(데이터 없음)."""
     if not overlap:
         return
+    items = overlap if isinstance(overlap, list) else [overlap]
+    for item in items:
+        _render_overlap_item(item)
+
+
+def _render_overlap_item(overlap: dict):
     if not overlap.get("available"):
+        name = overlap.get("fund_name") or overlap.get("fund_code") or "이 상품"
         st.markdown(
-            '<div class="overlap-box">이 상품은 보유종목 정보가 공개되지 않아 '
+            f'<div class="overlap-box">{_esc(name)}은(는) 보유종목 정보가 공개되지 않아 '
             "비교할 수 없어요.</div>",
             unsafe_allow_html=True,
         )

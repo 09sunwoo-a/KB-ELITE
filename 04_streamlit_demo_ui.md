@@ -236,9 +236,12 @@ class AgentTurnResult(TypedDict):
     action_reason: str
     conditions: dict               # State.conditions 스냅샷 → 탐색 기준 칩바
     candidates: list[dict]         # 아래 후보 카드 스키마. search 턴이 아니면 []
-    comparison: dict | None        # {"fund_codes": [...], "rows": [{"label", "values": [...]}]}
-    overlap: dict | None           # {"available", "fund_code", "fund_name",
+    comparison: dict | None        # {"fund_codes": [...], "labels": [...](선택),
+                                   #  "rows": [{"label", "values": [...]}]}
+    overlap: list[dict] | None     # 펀드별 1항목 (2026-07-18: 복수 펀드 겹침 지원 — dict → list)
+                                   # 각 항목: {"available", "fund_code", "fund_name",
                                    #  "overlap_stocks": ["엔비디아", ...], "as_of", "note"}
+                                   # (+basis·checked_holdings 등 추가 키 허용, UI는 필수 키만 렌더)
     risk_block: dict | None        # {"excluded_by_risk": int, "blocked": bool}
                                    # 성향 초과 차단 안내 박스(4-7) 렌더링용
     chips: list[str]               # 후속 칩 3개
@@ -268,7 +271,7 @@ class AgentTurnResult(TypedDict):
 - `manager`: 결측(운용사 null 1건)이면 `null` → 카드에서 행 생략.
 - `top_stocks_summary`: stocks_raw를 alias 사전으로 한글 병기한 요약 문자열(코드 생성). `has_holdings_info=false`면 `null` → "주요 보유종목 정보가 공개되지 않은 상품"으로 표시.
 - `selection_reason`은 정형 근거(fee_quartile, 매칭 종목, risk_score)로 코드가 생성한다. LLM 생성 아님.
-- **(백엔드 A 세션 확인 필요)** 2026-07-18 스키마 확장: `manager`·`top_stocks_summary` 추가, `returns_display` 기본 채움 — search/compare 노드의 candidates 조립에 반영할 것.
+- **(백엔드 A 세션 확인 필요)** 2026-07-18 스키마 확장: `manager`·`top_stocks_summary` 추가, `returns_display` 기본 채움 — search/compare 노드의 candidates 조립(`tools._make_card`)에 반영할 것. **반영 전까지는 `LangGraphAgentAdapter`가 funds.json에서 임시 보강한다** (수치 단일 출처 동일, 백엔드 반영 시 어댑터 보강은 자동 무시됨).
 
 ### 6-4. Session State 보관 목록
 

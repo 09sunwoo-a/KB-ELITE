@@ -80,6 +80,10 @@ def resolve_agent_mode(wanted: str):
 def reset_conversation():
     """새 thread 발급 + 오프닝 재생성. 기존 thread 재사용 금지(04 §3-1)."""
     persona = PERSONAS[st.session_state.persona_id]
+    opening = {"text": persona["opening"], "chips": list(persona["chips"])}
+    if st.session_state.agent_mode == "live":
+        # Live: 그래프 밖 build_opening() 직접 호출 (02 §8, 04 §6-1)
+        opening = create_adapter("live").get_opening(st.session_state.persona_id)
     st.session_state.thread_id = str(uuid.uuid4())
     st.session_state.conditions = {}
     st.session_state.last_candidates = []
@@ -87,8 +91,8 @@ def reset_conversation():
     st.session_state.pending_prompt = None
     st.session_state.messages = [{
         "role": "assistant",
-        "content": persona["opening"],   # Live 연결(J1) 후에는 build_opening() 결과
-        "chips": list(persona["chips"]),
+        "content": opening["text"],
+        "chips": list(opening["chips"]),
         "result": None,
     }]
 

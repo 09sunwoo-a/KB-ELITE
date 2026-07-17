@@ -21,7 +21,7 @@ RESULT_SCHEMA = {
     "conditions": dict,
     "candidates": list,
     "comparison": (dict, type(None)),
-    "overlap": (dict, type(None)),
+    "overlap": (list, type(None)),
     "risk_block": (dict, type(None)),
     "chips": list,
     "trace": list,
@@ -67,16 +67,21 @@ def validate_result(tag, r):
               f"[{tag}] 카드{i} returns_display 형식")
         check(not (set(card) & FORBIDDEN_KEYS), f"[{tag}] 카드{i} 금지 키(비중 등) 없음")
 
-    ov = r.get("overlap")
-    if ov is not None:
-        check(set(ov.keys()) == {"available", "fund_code", "fund_name", "overlap_stocks", "as_of", "note"},
-              f"[{tag}] overlap 키 집합", f"→ {sorted(ov.keys())}")
-        check(all(isinstance(s, str) for s in ov.get("overlap_stocks", [])),
-              f"[{tag}] overlap_stocks는 종목명 문자열만(비중 없음)")
+    ov_list = r.get("overlap")
+    if ov_list is not None:
+        required = {"available", "fund_code", "fund_name", "overlap_stocks", "as_of", "note"}
+        for j, ov in enumerate(ov_list, 1):
+            check(required <= set(ov.keys()),
+                  f"[{tag}] overlap{j} 필수 키 포함", f"누락: {required - set(ov.keys())}")
+            check(all(isinstance(s, str) for s in ov.get("overlap_stocks", [])),
+                  f"[{tag}] overlap{j} overlap_stocks는 종목명 문자열만(비중 없음)")
+            check(not ({"weight", "비중", "중복률", "overlap_pct"} & set(ov.keys())),
+                  f"[{tag}] overlap{j} 금지 키(비중 등) 없음")
 
     cp = r.get("comparison")
     if cp is not None:
-        check(set(cp.keys()) == {"fund_codes", "rows"}, f"[{tag}] comparison 키 집합")
+        check({"fund_codes", "rows"} <= set(cp.keys()) <= {"fund_codes", "rows", "labels"},
+              f"[{tag}] comparison 키 집합", f"→ {sorted(cp.keys())}")
         for row in cp.get("rows", []):
             check(set(row.keys()) == {"label", "values"}, f"[{tag}] 비교 행 '{row.get('label')}' 형식")
             check(row.get("label") not in FORBIDDEN_ROW_LABELS,
@@ -107,10 +112,10 @@ def cross_check_funds(tag, r, funds):
             if rd:
                 check(rd["value"] == f["returns"]["m12"], f"[{tag}] 카드{i} 12개월 수익률 == funds.json",
                       f"fixture={rd['value']} data={f['returns']['m12']}")
-    ov = r.get("overlap")
-    if ov and ov.get("available"):
-        f = funds.get(ov["fund_code"])
-        check(f is not None and ov["fund_name"] == f["name"], f"[{tag}] overlap 상품명 == funds.json")
+    for ov in r.get("overlap") or []:
+        if ov.get("available"):
+            f = funds.get(ov["fund_code"])
+            check(f is not None and ov["fund_name"] == f["name"], f"[{tag}] overlap 상품명 == funds.json")
 
 
 def main():
@@ -155,7 +160,7 @@ def main():
     c2 = list(FIXTURES.values())[1]
     print(f"  · 코스 ② 비교표 {len(c2['comparison']['rows'])}행, 대상 {c2['comparison']['fund_codes']}")
     c3 = list(FIXTURES.values())[2]
-    print(f"  · 코스 ③ 겹침 종목 {c3['overlap']['overlap_stocks']} (비중·중복률 키 없음)")
+    print(f"  · 코스 ③ 겹침 종목 {c3['overlap'][0]['overlap_stocks']} (비중·중복률 키 없음)")
     print(f"  · 코스 ④ blocked=True, 후보 0개, 대안 칩 {f4['chips']}")
 
 

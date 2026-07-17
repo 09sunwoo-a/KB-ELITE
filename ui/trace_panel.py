@@ -4,6 +4,8 @@
 trace 노출 금지(04 §1-5): 모델 CoT, 시스템 프롬프트 원문, API Key,
 고객 식별자 원문, 임베딩 벡터, RAG CONTENT 원문 전체. 이 패널은
 TraceEntry의 summary/detail(노출 가능 데이터만 담김)만 렌더링한다.
+
+detail 형식은 app/graph.py가 남기는 실제 trace와 동일하다 (Mock fixture도 정렬).
 """
 import streamlit as st
 
@@ -19,17 +21,6 @@ NODE_LABELS = {
     "postprocess": "표현·수치 안전 점검",
 }
 
-# 탐색 노트의 detail 키 → 고객 언어 라벨 (04 §5-2)
-NOTE_LABELS = {
-    "extracted_conditions": "추출한 탐색 조건",
-    "compare_targets": "비교 대상(후보 번호)",
-    "resolved_codes": "해석된 상품코드",
-    "selected_codes": "채택 상품코드",
-    "target_fund": "대상 상품코드",
-    "overlap_intent": "보유종목 겹침 의도",
-    "ask_streak": "연속 확인 질문 수",
-}
-
 
 def _flow_section(trace: list):
     """실행 흐름 — 노드 진행 + 도구 호출 들여쓰기 (04 §5-1)."""
@@ -39,25 +30,33 @@ def _flow_section(trace: list):
         node = entry.get("node")
         if node not in seen:
             seen.append(node)
-            label = NODE_LABELS.get(node, node)
-            lines.append(f'<div class="tp-node">✓ {label}</div>')
+            lines.append(f'<div class="tp-node">✓ {NODE_LABELS.get(node, node)}</div>')
         if entry.get("kind") == "tool":
-            tool = entry.get("detail", {}).get("tool", "도구")
-            lines.append(f'<div class="tp-tool">└ 🔧 {tool} — {entry.get("summary", "")}</div>')
+            lines.append(f'<div class="tp-tool">└ 🔧 {entry.get("summary", "")}</div>')
     st.markdown("".join(lines), unsafe_allow_html=True)
 
 
 def _notes_tab(event: dict):
-    """탐색 노트 — conditions·후보·행동을 고객 언어 라벨로 (04 §5-2)."""
+    """탐색 노트 — 라우터 추출·오버라이드·누적 조건 (04 §5-2)."""
     st.markdown(f"**이번 행동** — {event.get('action', '?').upper()}")
     shown = False
     for entry in event.get("trace", []):
         if entry.get("kind") != "route":
             continue
-        for key, label in NOTE_LABELS.items():
-            if key in entry.get("detail", {}):
-                st.markdown(f"- {label}: `{entry['detail'][key]}`")
-                shown = True
+        detail = entry.get("detail", {})
+        if detail.get("extracted"):
+            st.markdown(f"- 이번 발화에서 추출: `{detail['extracted']}`")
+            shown = True
+        if detail.get("conditions"):
+            st.markdown(f"- 누적 탐색 기준: `{detail['conditions']}`")
+            shown = True
+        for ov in detail.get("overrides") or []:
+            st.markdown(f"- 규칙 오버라이드: {ov}")
+            shown = True
+    for entry in event.get("trace", []):
+        if entry.get("node") == "ask" and entry.get("kind") == "info":
+            st.markdown(f"- {entry.get('summary', '')}")
+            shown = True
     if not shown:
         st.caption("이번 턴에 기록된 탐색 노트가 없어요.")
     with st.expander("원본 trace 보기"):
@@ -65,45 +64,41 @@ def _notes_tab(event: dict):
 
 
 def _retrieval_tab(event: dict):
-    """검색 근거 — 필터 통과/제외 건수, 벡터 사용 여부 (04 §5-2)."""
+    """검색 근거 — 적용 조건, 랭킹 방식(벡터 사용 여부), 제외 건수 (04 §5-2)."""
     shown = False
     for entry in event.get("trace", []):
+        if entry.get("node") != "search" or entry.get("kind") != "tool":
+            continue
         detail = entry.get("detail", {})
-        if entry.get("kind") == "tool" and entry["detail"].get("tool") == "search_funds":
-            if "alias_matched" in detail:
-                st.markdown(f"- 조건 매칭: **{detail['alias_matched']}건**")
-            if "passed_filter" in detail:
-                st.markdown(f"- 정형 필터 통과: **{detail['passed_filter']}건**")
-            if "excluded_by_risk" in detail:
-                st.markdown(f"- 성향 범위 초과 제외: **{detail['excluded_by_risk']}건**")
-            if detail.get("sort"):
-                st.markdown(f"- 정렬: {detail['sort']}")
-            if detail.get("selected_codes"):
-                st.markdown(f"- 채택: `{'`, `'.join(detail['selected_codes'])}`")
-            shown = True
-        if entry.get("kind") == "retrieval":
-            st.info(entry.get("summary", ""))
-            shown = True
+        st.markdown(f"**{entry.get('summary', '')}**")
+        if detail.get("applied"):
+            st.markdown("- 적용 조건: " + " · ".join(detail["applied"]))
+        ranking = detail.get("ranking_mode", "")
+        if ranking:
+            if "벡터" in ranking:
+                st.info(f"벡터 검색 사용 — {ranking}")
+            else:
+                st.info(f"벡터 검색 미사용 — 정형 필터+정렬로 종결 ({ranking})")
+        if detail.get("excluded_by_risk"):
+            st.markdown(f"- 성향 범위 초과 제외: **{detail['excluded_by_risk']}건**"
+                        + (" → **전부 차단**" if detail.get("blocked") else ""))
+        if detail.get("codes"):
+            st.markdown(f"- 채택: `{'`, `'.join(detail['codes'])}`")
+        shown = True
     if not shown:
         st.caption("이번 턴에는 검색이 실행되지 않았어요.")
 
 
 def _tools_tab(event: dict):
-    """도구 실행 — 도구명 / 입력 요약 / 결과 요약 (04 §5-2)."""
+    """도구 실행 — 도구 요약 + 민감정보 없는 입력·결과 detail (04 §5-2)."""
     tools = [e for e in event.get("trace", []) if e.get("kind") == "tool"]
     if not tools:
         st.caption("이번 턴에 실행된 도구가 없어요.")
         return
     for entry in tools:
-        detail = entry.get("detail", {})
-        st.markdown(f"**🔧 {detail.get('tool', '도구')}**")
-        if detail.get("input_summary") is not None:
-            st.caption("입력 요약")
-            st.json(detail["input_summary"])
-        rest = {k: v for k, v in detail.items() if k not in ("tool", "input_summary")}
-        if rest:
-            st.caption("결과 요약")
-            st.json(rest)
+        st.markdown(f"**🔧 {entry.get('summary', '')}**")
+        if entry.get("detail"):
+            st.json(entry["detail"], expanded=False)
 
 
 def _safety_tab(event: dict):
@@ -112,32 +107,30 @@ def _safety_tab(event: dict):
     if not safety:
         st.caption("이번 턴의 안전 점검 기록이 없어요.")
         return
+    # 성향 초과 건수는 search trace에서 가져온다
+    excluded, blocked = 0, False
+    for entry in event.get("trace", []):
+        detail = entry.get("detail", {})
+        if entry.get("node") == "search" and "excluded_by_risk" in detail:
+            excluded = detail.get("excluded_by_risk") or 0
+            blocked = bool(detail.get("blocked"))
     for entry in safety:
         d = entry.get("detail", {})
-        lines = []
-        replaced = d.get("banned_replaced", 0)
-        lines.append(
-            f"✅ 금칙 표현 검사 (치환 {replaced}건)" if not replaced
-            else f"⚠ 금칙 표현 {replaced}건 치환"
-        )
-        mismatch = d.get("numeric_mismatch", 0)
-        lines.append(
-            f"✅ 수치 대조 (불일치 {mismatch}건)" if not mismatch
-            else f"⚠ 수치 불일치 {mismatch}건 치환"
-        )
-        if d.get("disclosure_inserted"):
-            lines.append("✅ 고지 문구 삽입")
-        excluded = d.get("excluded_by_risk", 0)
-        if excluded or d.get("blocked"):
-            lines.append(f"⚠ 성향 초과 상품 {excluded}건 노출 차단")
-        for line in lines:
-            st.markdown(line)
-        extras = {k: v for k, v in d.items() if k not in (
-            "banned_replaced", "numeric_mismatch", "disclosure_inserted",
-            "excluded_by_risk", "blocked",
-        )}
-        for value in extras.values():
-            st.caption(f"· {value}")
+        banned, numeric = d.get("banned", []), d.get("numeric", [])
+        st.markdown(f"✅ 금칙 표현 검사 (치환 {len(banned)}건)" if not banned
+                    else f"⚠ 금칙 표현 {len(banned)}건 치환")
+        for b in banned:
+            st.caption(f"· {b}")
+        st.markdown(f"✅ 수치 대조 (교정 {len(numeric)}건)" if not numeric
+                    else f"⚠ 수치 {len(numeric)}건 교정")
+        for n in numeric:
+            st.caption(f"· {n}")
+        if d.get("disclosures"):
+            st.markdown(f"✅ 고지 문구 삽입 ({len(d['disclosures'])}건)")
+        if "blocked" in (d.get("notices") or []) or blocked:
+            st.markdown(f"⚠ 성향 초과 상품 {excluded}건 전부 노출 차단 — 차단 안내 삽입")
+        elif "excluded" in (d.get("notices") or []) or excluded:
+            st.markdown(f"⚠ 성향 초과 상품 {excluded}건 노출 차단")
 
 
 def render_trace_panel(agent_mode: str, trace_events: list):

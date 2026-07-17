@@ -4,12 +4,19 @@
 UI는 adapter 종류를 몰라야 한다. `agent_mode`는 배지 표시에만 쓴다.
 Live 연결 실패 시 자동으로 Mock으로 위장 전환하지 않는다(04 §1 원칙 3) —
 AdapterConnectionError를 올리고, 전환은 사용자가 화면에서 명시적으로 한다.
+
+J1: LangGraphAgentAdapter는 app/을 import만 한다(05 §5-4 소유권).
 """
+import json
 import os
+import sys
 import time
+from pathlib import Path
 from typing import Iterable, Literal, Protocol, TypedDict
 
 from mock_fixtures import get_fixture
+
+_REPO_ROOT = Path(__file__).parent.parent
 
 
 class TraceEntry(TypedDict):
@@ -67,24 +74,132 @@ class MockAgentAdapter:
         }
 
 
-class LangGraphAgentAdapter:
-    """compiled_graph.stream(stream_mode="updates") 소비 — J1 단계에서 구현.
+# ── Live ────────────────────────────────────────────────────────────
+# 그래프(InMemorySaver 포함)와 스레드 기록은 프로세스 수명 동안 유지돼야
+# 하므로 모듈 전역 싱글턴으로 둔다 (Streamlit rerun에도 살아남는다).
+_GRAPH = None
+_SEEN_THREADS: set = set()
+_FUNDS = None
 
-    지금은 app.graph가 없거나 미완성이므로 초기화 시점에 명확히 실패한다.
-    """
+
+def _funds() -> dict:
+    """카드 임시 보강용 funds.json (읽기 전용 — 04 §6-3 백엔드 반영 전까지)."""
+    global _FUNDS
+    if _FUNDS is None:
+        _FUNDS = json.loads(
+            (_REPO_ROOT / "data" / "funds.json").read_text(encoding="utf-8"))
+    return _FUNDS
+
+
+class LangGraphAgentAdapter:
+    """compiled_graph.stream(stream_mode="updates") 소비 → TurnEvent 변환 (04 §6-1)."""
 
     def __init__(self):
+        if str(_REPO_ROOT) not in sys.path:
+            sys.path.insert(0, str(_REPO_ROOT))
         try:
-            from app.graph import graph  # noqa: F401  (트랙 A 산출물 — import만)
+            from app.graph import build_graph
+            from app.opening import build_opening
+            from app.personas import load_profile
         except Exception as exc:
             raise AdapterConnectionError(
-                f"Live 연결 실패 — app.graph를 불러올 수 없습니다 ({type(exc).__name__}). "
-                "백엔드(A5) 완성 후 J1 단계에서 연결됩니다."
+                f"Live 연결 실패 — app 모듈을 불러올 수 없습니다 ({type(exc).__name__}). "
+                "백엔드 산출물과 .env(OPENAI_API_KEY)를 확인해 주세요."
             ) from exc
-        raise AdapterConnectionError("LangGraphAgentAdapter 변환부는 J1 단계에서 구현됩니다.")
+        global _GRAPH
+        if _GRAPH is None:
+            _GRAPH = build_graph()
+        self._graph = _GRAPH
+        self._load_profile = load_profile
+        self._build_opening = build_opening
 
-    def stream_turn(self, user_message, thread_id, persona_id):  # pragma: no cover
-        raise NotImplementedError
+    def get_opening(self, persona_id: str) -> dict:
+        """그래프 밖 build_opening() 직접 호출 (02 §8) → {"text", "chips"}."""
+        return self._build_opening(self._load_profile(persona_id)["profile"])
+
+    def stream_turn(self, user_message, thread_id, persona_id):
+        from langchain_core.messages import HumanMessage
+
+        payload = {"messages": [HumanMessage(content=user_message)]}
+        if thread_id not in _SEEN_THREADS:
+            # 새 thread 첫 턴 — 프로필·노출 상한을 State 초기값으로 주입 (02 §2)
+            payload.update(self._load_profile(persona_id))
+            _SEEN_THREADS.add(thread_id)
+        config = {"configurable": {"thread_id": thread_id}}
+
+        turn, turn_trace = None, []
+        yield {"event_type": "node_started", "node": "router", "trace": []}
+        try:
+            for update in self._graph.stream(payload, config, stream_mode="updates"):
+                for node, output in update.items():
+                    output = output or {}
+                    new_trace = output.get("trace") or []
+                    turn_trace.extend(new_trace)
+                    yield {"event_type": "node_completed", "node": node, "trace": new_trace}
+                    if node == "postprocess":
+                        turn = output.get("turn")
+                    else:
+                        # updates 모드는 완료 시점만 알려주므로 다음 노드 시작을 유도한다
+                        next_node = output.get("action") if node == "router" else "postprocess"
+                        if next_node:
+                            yield {"event_type": "node_started", "node": next_node, "trace": []}
+        except Exception as exc:
+            # stack trace 노출 금지 (04 §8) — 오류 코드만 trace에 남긴다
+            yield {
+                "event_type": "turn_error",
+                "error": "에이전트 실행 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
+                "trace": [{"node": "postprocess", "kind": "info",
+                           "summary": f"turn_error: {type(exc).__name__}", "detail": {}}],
+            }
+            return
+
+        if not turn or not turn.get("answer"):
+            yield {"event_type": "turn_error",
+                   "error": "응답을 완성하지 못했어요. 다시 한번 물어봐 주세요.", "trace": []}
+            return
+
+        yield {
+            "event_type": "turn_completed",
+            "node": "postprocess",
+            "trace": turn_trace,
+            "result": self._to_result(turn, turn_trace),
+        }
+
+    def _to_result(self, turn: dict, trace: list) -> dict:
+        """postprocess의 turn dict → 04 §6-3 AgentTurnResult."""
+        return {
+            "answer": turn.get("answer", ""),
+            "action": turn.get("action", ""),
+            "action_reason": turn.get("action_reason", ""),
+            "conditions": turn.get("conditions") or {},
+            "candidates": [self._enrich_card(c) for c in (turn.get("candidates") or [])],
+            "comparison": turn.get("comparison"),
+            "overlap": turn.get("overlap"),          # list[dict] | None
+            "risk_block": turn.get("risk_block"),
+            "chips": turn.get("chips") or [],
+            "trace": trace,
+        }
+
+    @staticmethod
+    def _enrich_card(card: dict) -> dict:
+        """04 §6-3 확장 필드(manager·top_stocks_summary·returns_display) 임시 보강.
+
+        백엔드 _make_card가 채우기 전까지 funds.json(수치 단일 출처)에서 직접
+        보강한다. 백엔드가 채우면 여기는 자동으로 건너뛴다.
+        """
+        f = _funds().get(card.get("fund_code"))
+        if not f:
+            return card
+        card = dict(card)
+        if card.get("manager") is None:
+            card["manager"] = f.get("manager")
+        if not card.get("top_stocks_summary"):
+            card["top_stocks_summary"] = ", ".join(f.get("matched_aliases") or []) or None
+        if not card.get("returns_display"):
+            m12 = (f.get("returns") or {}).get("m12")
+            if m12 is not None:
+                card["returns_display"] = {"period": "12개월", "value": m12}
+        return card
 
 
 def default_mode() -> str:
