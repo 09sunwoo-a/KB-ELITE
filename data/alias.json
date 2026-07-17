@@ -1,0 +1,12 @@
+{
+  "엔비디아": ["NVIDIA", "엔비디아"],
+  "테슬라": ["TESLA", "TSLA", "테슬라"],
+  "애플": ["APPLE", "AAPL", "애플"],
+  "마이크로소프트": ["MICROSOFT", "MSFT", "마이크로소프트"],
+  "알파벳": ["ALPHABET", "GOOGL", "알파벳", "구글"],
+  "아마존": ["AMAZON", "AMZN", "아마존"],
+  "삼성전자": ["삼성전자"],
+  "SK하이닉스": ["SK하이닉스", "하이닉스"],
+  "TSMC": ["TAIWAN SEMICONDUCTOR", "TSMC"],
+  "텐센트": ["TENCENT", "텐센트"]
+}
