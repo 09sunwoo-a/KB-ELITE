@@ -53,6 +53,7 @@ def init_state():
         "last_candidates": [],
         "trace_events": [],
         "pending_prompt": None,
+        "pending_opening": False,
         "adapter_error": None,
     }
     for k, v in defaults.items():
@@ -74,21 +75,26 @@ def resolve_agent_mode(wanted: str):
 
 
 def reset_conversation():
-    """새 thread 발급 + 오프닝 재생성. 기존 thread 재사용 금지(04 §3-1)."""
-    persona = PERSONAS[st.session_state.persona_id]
-    opening = {"text": persona["opening"], "chips": list(persona["chips"])}
-    if st.session_state.agent_mode == "live":
-        # Live: 그래프 밖 build_opening() 직접 호출 (02 §8, 04 §6-1)
-        opening = create_adapter("live").get_opening(st.session_state.persona_id)
+    """새 thread 발급 + 오프닝 재생성. 기존 thread 재사용 금지(04 §3-1).
+
+    Live 모드는 오프닝을 여기서 만들지 않는다 — pending_opening 플래그만 세우고,
+    render_chat의 run_opening()이 진행 상태를 보여주며 실시간 생성한다(04 §4-1, 캐시 없음).
+    """
     st.session_state.thread_id = str(uuid.uuid4())
     st.session_state.conditions = {}
     st.session_state.last_candidates = []
     st.session_state.trace_events = []
     st.session_state.pending_prompt = None
+    if st.session_state.agent_mode == "live":
+        st.session_state.messages = []
+        st.session_state.pending_opening = True
+        return
+    persona = PERSONAS[st.session_state.persona_id]
+    st.session_state.pending_opening = False
     st.session_state.messages = [{
         "role": "assistant",
-        "content": opening["text"],
-        "chips": list(opening["chips"]),
+        "content": persona["opening"],
+        "chips": list(persona["chips"]),
         "result": None,
     }]
 
@@ -261,10 +267,11 @@ def render_chips(message, msg_idx):
             st.rerun()
 
 
-def run_turn(scroll_area, prompt):
-    """사용자 말풍선 표시 → 노드 진행(타이핑 인디케이터) → 답변 타자기 연출."""
+def run_turn(scroll_area, prompt, live_flow_slot=None):
+    """사용자 말풍선 표시 → 노드 진행(타이핑 인디케이터 + trace 실시간 흐름) → 답변 타자기 연출."""
     adapter = create_adapter(st.session_state.agent_mode)
     result = None
+    visited = []   # 시작된 노드 순서 — trace 패널 실시간 흐름(04 §5-1)
     with scroll_area:
         st.markdown(bubble_html("user", prompt), unsafe_allow_html=True)
         placeholder = st.empty()
@@ -274,24 +281,32 @@ def run_turn(scroll_area, prompt):
             ):
                 etype = event.get("event_type")
                 if etype == "node_started":
-                    label = NODE_PROGRESS.get(event.get("node", ""), "처리하고 있어요")
+                    node = event.get("node", "")
+                    if node and node not in visited:
+                        visited.append(node)
+                    trace_panel.render_live_flow(live_flow_slot, visited)
+                    label = NODE_PROGRESS.get(node, "처리하고 있어요")
                     placeholder.markdown(typing_html(label), unsafe_allow_html=True)
                 elif etype == "turn_completed":
                     result = event["result"]
                 elif etype == "turn_error":
+                    trace_panel.render_live_flow(live_flow_slot, visited, state="error")
                     placeholder.empty()
                     st.error(event.get("error", "일시적인 문제가 발생했어요. 다시 시도해 주세요."))
                     return
         except Exception:
             # stack trace 노출 금지 (04 §8)
+            trace_panel.render_live_flow(live_flow_slot, visited, state="error")
             placeholder.empty()
             st.error("일시적인 문제가 발생했어요. 잠시 후 다시 시도해 주세요.")
             return
 
         if result is None:
+            trace_panel.render_live_flow(live_flow_slot, visited, state="error")
             placeholder.empty()
             return
 
+        trace_panel.render_live_flow(live_flow_slot, visited, state="done")
         # 답변 타자기 연출 (04 조정 #6) — postprocess를 통과한 완성본을 표시
         answer = result["answer"]
         for end in range(TYPEWRITER_CHARS_PER_TICK, len(answer) + TYPEWRITER_CHARS_PER_TICK,
@@ -321,6 +336,46 @@ def run_turn(scroll_area, prompt):
     st.rerun()
 
 
+def run_opening(scroll_area):
+    """채팅 진입·초기화 직후 — 개인화 오프닝 실시간 생성 (02 §8: 캐시 없음, 진행 상태 표시)."""
+    with scroll_area:
+        placeholder = st.empty()
+        placeholder.markdown(
+            typing_html("고객 프로필을 확인하고 첫인사를 준비하고 있어요"),
+            unsafe_allow_html=True,
+        )
+        try:
+            opening = create_adapter("live").get_opening(st.session_state.persona_id)
+        except Exception:
+            # stack trace 노출 금지 (04 §8) — 페르소나 fixture 오프닝으로 폴백
+            persona = PERSONAS[st.session_state.persona_id]
+            opening = {"text": persona["opening"], "chips": list(persona["chips"]), "trace": []}
+        # 타자기 연출 — 턴 답변(04 조정 #6)과 동일한 체감
+        text = opening["text"]
+        for end in range(TYPEWRITER_CHARS_PER_TICK, len(text) + TYPEWRITER_CHARS_PER_TICK,
+                         TYPEWRITER_CHARS_PER_TICK):
+            placeholder.markdown(bubble_html("assistant", text[:end], cursor=True),
+                                 unsafe_allow_html=True)
+            time.sleep(TYPEWRITER_TICK_SEC)
+        placeholder.markdown(bubble_html("assistant", text), unsafe_allow_html=True)
+
+    st.session_state.messages = [{
+        "role": "assistant",
+        "content": opening["text"],
+        "chips": list(opening["chips"]),
+        "result": None,
+    }]
+    if opening.get("trace"):
+        st.session_state.trace_events.append({
+            "user_message": "(채팅 진입 — 개인화 오프닝)",
+            "action": "opening",
+            "action_reason": "프로필 신호를 참고해 첫인사 본문을 생성하고 코드로 검증했어요.",
+            "trace": opening["trace"],
+        })
+    st.session_state.pending_opening = False
+    st.rerun()
+
+
 def render_chat():
     # 모드 오류(Live 연결 실패) — 명시적 전환만 허용 (04 §1-3)
     if st.session_state.agent_mode == "error":
@@ -330,14 +385,24 @@ def render_chat():
             st.rerun()
         return
 
-    # trace 패널 상시 표시 (04 §2 — 토글 없음)
+    pending_opening = bool(st.session_state.pending_opening)
+    prompt = None if pending_opening else st.session_state.pop("pending_prompt", None)
+
+    # trace 패널 상시 표시 (04 §2 — 토글 없음).
+    # 턴 실행 중에는 실시간 실행 흐름 모드로 전환 (04 §5-1 ✓·●·○)
     chat_col, trace_col = st.columns([1.6, 1.0])
     with trace_col:
-        trace_panel.render_trace_panel(
-            st.session_state.agent_mode, st.session_state.trace_events
-        )
-
-    prompt = st.session_state.pop("pending_prompt", None)
+        if pending_opening:
+            live_flow_slot = trace_panel.render_trace_panel_live(st.session_state.agent_mode)
+            trace_panel.render_opening_live(live_flow_slot)
+        elif prompt:
+            live_flow_slot = trace_panel.render_trace_panel_live(st.session_state.agent_mode)
+            trace_panel.render_live_flow(live_flow_slot, ["router"])
+        else:
+            live_flow_slot = None
+            trace_panel.render_trace_panel(
+                st.session_state.agent_mode, st.session_state.trace_events
+            )
 
     with chat_col:
         with st.container(key="chat_phone"):
@@ -357,16 +422,20 @@ def render_chat():
 
             typed = st.chat_input("궁금한 점을 편하게 물어보세요")
             if typed:
-                prompt = typed
+                # 칩과 동일 경로로 통일 — rerun 시점에 trace 패널이 실시간 모드로 시작한다
+                st.session_state.pending_prompt = typed
+                st.rerun()
 
         # 배지는 사이드바·trace 패널에만 표시 — 폰 아래 요소를 없애
         # 화면 1(서브메인)과 화면 2(챗)의 세로 규격을 동일하게 유지한다
         # nonce로 매 rerun마다 스크립트를 재마운트시킨다 (같은 내용이면 재실행 안 됨)
         st_components.html(AUTOSCROLL_JS + f"<!-- {uuid.uuid4()} -->", height=0)
 
-    if prompt:
+    if pending_opening:
+        run_opening(scroll_area)   # 내부에서 rerun
+    elif prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
-        run_turn(scroll_area, prompt)
+        run_turn(scroll_area, prompt, live_flow_slot)
 
 
 # ---------------------------------------------------------------------------

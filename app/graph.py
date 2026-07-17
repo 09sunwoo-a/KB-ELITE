@@ -15,10 +15,11 @@ from dotenv import load_dotenv
 from langchain_core.messages import AIMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.graph import END, START, StateGraph, add_messages
+from pydantic import BaseModel, Field
 
 from app import prompts, store
 from app.router import route_turn, merged_conditions
-from app.safety import run_safety
+from app.safety import check_banned, run_safety
 from app.tools import calc_annual_cost, match_overlap, search_funds
 
 load_dotenv()
@@ -30,8 +31,9 @@ _llm = None
 def _get_llm():
     global _llm
     if _llm is None:
-        from langchain_openai import ChatOpenAI
-        _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2)
+        from langchain_anthropic import ChatAnthropic
+        # 응답·칩 생성은 Haiku — 시연 체감 속도·비용 우선 (02 §9)
+        _llm = ChatAnthropic(model="claude-haiku-4-5", temperature=0.2, max_tokens=1024)
     return _llm
 
 
@@ -91,8 +93,18 @@ def _profile_brief(profile: dict) -> str:
     }, ensure_ascii=False)
 
 
-def _generate(state, instruction: str, context: dict) -> str:
-    """응답 생성 LLM 호출 (턴당 1회). 재프레이밍 지시는 여기서 결합 (02 §7-1)."""
+class _AnswerWithChips(BaseModel):
+    """응답 생성 structured output — 02 §7-2 ④ 동적 칩."""
+    answer: str = Field(description="고객에게 보여줄 응답 본문")
+    chips: list[str] = Field(description="후속 칩 정확히 2개 — 고객이 클릭해 다음 발화로 보낼 짧은 요청 문장")
+
+
+def _generate(state, instruction: str, context: dict, with_chips: bool = False):
+    """응답 생성 LLM 호출 (턴당 1회). 재프레이밍 지시는 여기서 결합 (02 §7-1).
+
+    with_chips=True면 같은 호출에서 후속 칩 2개를 함께 받는다 (02 §7-2 ④).
+    반환: with_chips=False → str / True → (str, list[str]) — 실패 시 칩은 [].
+    """
     route = state.get("route", {})
     parts = [prompts.COMMON_SYSTEM,
              f"\n[고객 컨텍스트(복창 금지)] {_profile_brief(state['profile'])}", instruction]
@@ -100,12 +112,20 @@ def _generate(state, instruction: str, context: dict) -> str:
         parts.append(prompts.REFRAME_DELEGATION)
     if route.get("out_of_scope"):
         parts.append(prompts.REFRAME_OUT_OF_SCOPE)
+    if with_chips:
+        parts.append(prompts.CHIPS_INSTRUCTION)
     msgs = [("system", "\n".join(parts))]
     hist = _history_text(state)
     if hist:
         msgs.append(("user", f"[최근 대화]\n{hist}"))
     msgs.append(("user", f"[제공 데이터]\n{json.dumps(context, ensure_ascii=False)}\n\n"
                          f"[고객 발화]\n{_last_user_message(state)}"))
+    if with_chips:
+        try:
+            res = _get_llm().with_structured_output(_AnswerWithChips).invoke(msgs)
+            return res.answer, res.chips
+        except Exception:  # structured output 실패 → 답변만이라도 확보, 칩은 규칙 폴백
+            return _get_llm().invoke(msgs).content, []
     return _get_llm().invoke(msgs).content
 
 
@@ -169,14 +189,17 @@ def explain_node(state: ExploreState):
                                          contrib.get("type", "lumpsum"))
             context["대상후보"] = {"순번": idx, "이름": card["name"],
                                 "연간 총보수(%)": card["fee_pct"], "기준일": card["as_of"]}
-            context["안내"] = "비용 개념만 짧게 설명하라. 원 단위 계산은 시스템이 별도로 붙인다."
-    answer = _generate(state, prompts.EXPLAIN_INSTRUCTION, context)
+            context["안내"] = ("비용 개념만 짧게 설명하라: 총보수는 고객이 투자한 잔액에 비례해 "
+                             "기준가격에서 매일 차감된다는 사실만 말한다. 펀드 전체 자산 규모와 "
+                             "연결짓지 마라. 원 단위 계산은 시스템이 별도로 붙인다.")
+    answer, llm_chips = _generate(state, prompts.EXPLAIN_INSTRUCTION, context, with_chips=True)
     if cost_note:  # 03 §6: 계산 문자열은 LLM 재서술 없이 코드가 그대로 삽입
         answer += "\n\n" + cost_note
     return {
         "draft_answer": answer,
         "turn": {"explained_term": entry["term"] if entry else None,
                  "explain_chip": (entry or {}).get("explore_chip"),
+                 "llm_chips": llm_chips,
                  "numeric_note": (cost_note or "") + f" {card['fee_pct']}" if cost_note else None},
         "explained_terms": [entry["term"]] if entry else [],
         "trace": [_t("explain", "tool",
@@ -224,7 +247,11 @@ def search_node(state: ExploreState):
     if cards and conditions.get("cost_sensitive") and contrib.get("amount"):
         cost_note = calc_annual_cost(
             cards[0]["fee_pct"], contrib["amount"], contrib.get("type", "lumpsum"))
-    answer = _generate(state, prompts.SEARCH_INSTRUCTION, context)
+    # 동적 칩은 후보가 있을 때만 — 차단·0건은 규칙 칩이 복구 플로우를 담당 (02 §7-2 ④)
+    if cards:
+        answer, llm_chips = _generate(state, prompts.SEARCH_INSTRUCTION, context, with_chips=True)
+    else:
+        answer, llm_chips = _generate(state, prompts.SEARCH_INSTRUCTION, context), []
     if cost_note:  # 03 §6: 계산 문자열은 LLM 재서술 없이 코드가 그대로 삽입
         answer += "\n\n1번 후보 기준 비용 참고: " + cost_note
     trace = [_t("search", "tool",
@@ -233,7 +260,8 @@ def search_node(state: ExploreState):
                 + (", 전부 차단(blocked)" if result["blocked"] else ""),
                 {"applied": result["applied"], "ranking_mode": result["ranking_mode"],
                  "excluded_by_risk": result["excluded_by_risk"], "blocked": result["blocked"],
-                 "codes": [c["fund_code"] for c in cards]})]
+                 "codes": [c["fund_code"] for c in cards],
+                 "scores": result.get("scores"), "pool_size": result["pool_size"]})]
     return {
         "draft_answer": answer,
         "seen_funds": [c["fund_code"] for c in cards],
@@ -241,6 +269,7 @@ def search_node(state: ExploreState):
         "ask_streak": 0,
         "trace": trace,
         "turn": {"candidates": cards,
+                 "llm_chips": llm_chips,
                  "numeric_note": cost_note,
                  "risk_block": ({"excluded_by_risk": result["excluded_by_risk"],
                                  "blocked": result["blocked"]}
@@ -294,12 +323,35 @@ def compare_node(state: ExploreState):
                        {"펀드명": ov.get("fund_name"), "겹침": "보유종목 정보 비공개"}
                        for ov in overlap] if overlap else None
     context = {"comparison": comparison, "overlap": overlap_for_llm}
-    answer = _generate(state, prompts.COMPARE_INSTRUCTION, context)
+    answer, llm_chips = _generate(state, prompts.COMPARE_INSTRUCTION, context, with_chips=True)
     return {
         "draft_answer": answer,
         "trace": trace,
-        "turn": {"comparison": comparison, "overlap": overlap},
+        "turn": {"comparison": comparison, "overlap": overlap, "llm_chips": llm_chips},
     }
+
+
+def _valid_chips(raw) -> list[str] | None:
+    """LLM 동적 칩 검증 (02 §7-2 ④) — 하나라도 실패하면 세트 전체를 버리고 규칙 폴백.
+
+    반환: (통과한 칩 2개 | None, 폐기 사유 | None). 생성 시도가 없던 턴은 (None, None).
+    """
+    if not raw:
+        return None, None
+    if len(raw) < 2:
+        return None, "칩 2개 미만"
+    chips = []
+    for c in raw[:2]:
+        c = str(c).strip().rstrip(".!")
+        _, banned_log = check_banned(c)
+        if banned_log:
+            return None, f"금칙 표현: {banned_log[0]['found']}"
+        if not (4 <= len(c) <= 28) or "\n" in c:
+            return None, f"길이·형식 위반: {c!r}"
+        if c in chips:
+            return None, "중복 칩"
+        chips.append(c)
+    return chips, None
 
 
 def postprocess_node(state: ExploreState):
@@ -309,22 +361,27 @@ def postprocess_node(state: ExploreState):
     risk_block = turn.get("risk_block")
     cands = state.get("last_candidates", [])
 
+    # 동적 칩 검증 — explain·compare·search(후보 있음)만 llm_chips를 싣는다
+    llm_chips, chips_drop_reason = _valid_chips(turn.pop("llm_chips", None))
+
     has_holdings = bool(state["profile"].get("holdings"))
     if risk_block and risk_block.get("blocked"):
         chips = ["가입 가능한 범위에서 찾아보기", "이전 후보로 돌아가기"]
     elif action == "search" and cands:
-        chips = ["1번 자세히 보기",
-                 f"1번과 {len(cands)}번 비교하기" if len(cands) >= 2 else "조건 바꿔서 다시 찾기",
-                 "보유상품과 겹침 확인하기" if has_holdings else "조건 바꿔서 다시 찾기"]
+        chips = llm_chips or [
+            "1번 자세히 보기",
+            f"1번과 {len(cands)}번 비교하기" if len(cands) >= 2 else "조건 바꿔서 다시 찾기",
+            "보유상품과 겹침 확인하기" if has_holdings else "조건 바꿔서 다시 찾기"]
     elif action == "search":  # 검색 0건 (차단 아님) — 조건 완화 제안 (04 §8)
         chips = ["관련 테마로 넓혀 찾아보기", "조건 다시 정하기", "전체에서 넓게 찾아보기"]
     elif action == "explain":
-        # 설명한 용어와 연계된 탐색 칩 (terms.json explore_chip, 없으면 일반 칩)
-        chips = [turn.get("explain_chip") or "관련 상품 살펴보기",
-                 "다른 용어 물어보기",
-                 "보유상품과 비교하기" if has_holdings else "조건으로 찾아보기"]
+        # 폴백: 설명한 용어와 연계된 탐색 칩 (terms.json explore_chip, 없으면 일반 칩)
+        chips = llm_chips or [
+            turn.get("explain_chip") or "관련 상품 살펴보기",
+            "다른 용어 물어보기",
+            "보유상품과 비교하기" if has_holdings else "조건으로 찾아보기"]
     elif action == "ask":
-        # 방금 물어본 슬롯의 답변 선택지 — 클릭만으로 대화가 진행되게
+        # 방금 물어본 슬롯의 답변 선택지 — 클릭만으로 대화가 진행되게 (규칙 고정)
         chips = {
             "horizon": ["1~2년 안에 쓸 수도 있어요", "5년 이상 여유 있어요", "잘 모르겠어요"],
             "loss_tolerance": ["큰 변동은 피하고 싶어요", "어느 정도 변동은 괜찮아요", "잘 모르겠어요"],
@@ -332,8 +389,10 @@ def postprocess_node(state: ExploreState):
         }.get(turn.get("asked_slot"), ["잘 모르겠어요", "이 조건은 건너뛸게요", "처음부터 다시 정할래요"])
     else:  # compare
         overlap_done = bool(turn.get("overlap"))
-        chips = ["보유상품과 겹침 확인하기" if has_holdings and not overlap_done else "다른 후보 더 보기",
-                 "1번 자세히 보기", "조건 바꿔서 다시 찾기"]
+        chips = llm_chips or [
+            "보유상품과 겹침 확인하기" if has_holdings and not overlap_done else "다른 후보 더 보기",
+            "1번 자세히 보기", "조건 바꿔서 다시 찾기"]
+    chips_source = "llm" if llm_chips and chips is llm_chips else "rule"
 
     answer, report = run_safety(state.get("draft_answer", ""), turn)
     turn.update({
@@ -346,11 +405,14 @@ def postprocess_node(state: ExploreState):
     })
     summary = (f"안전 점검: 금칙 치환 {len(report['banned'])}건, "
                f"수치 교정 {len(report['numeric'])}건, "
-               f"안내 {report['notices'] or '해당 없음'}, 고지 {len(report['disclosures'])}건")
+               f"안내 {report['notices'] or '해당 없음'}, 고지 {len(report['disclosures'])}건"
+               + f" · 후속 칩 {chips_source}"
+               + (f"(동적 칩 폐기: {chips_drop_reason})" if chips_drop_reason else ""))
     return {"messages": [AIMessage(content=answer)],
             "turn": turn,
             "trace": [_t("postprocess", "safety", summary,
-                         {**report, "chips": chips})]}
+                         {**report, "chips": chips, "chips_source": chips_source,
+                          "chips_drop_reason": chips_drop_reason})]}
 
 
 def build_graph():

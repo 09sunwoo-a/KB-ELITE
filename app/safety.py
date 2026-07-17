@@ -50,13 +50,15 @@ DISCLOSURE_INFO = ("※ 본 안내는 특정 상품의 추천·권유가 아닌 
 DISCLOSURE_LOSS = ("※ 펀드는 예금과 달리 원금 손실이 발생할 수 있으며, "
                    "과거 수익률이 미래 수익을 보장하지 않습니다.")
 
-_NUM_FALLBACK_SENTENCE = "자세한 수치는 함께 표시된 카드에서 확인하실 수 있어요."
+_NUM_FALLBACK_WITH_CARDS = "자세한 수치는 함께 표시된 카드에서 확인하실 수 있어요."
+_NUM_FALLBACK_NO_CARDS = "구체적인 수치는 지금 확인된 데이터에 없어 말씀드리지 않을게요."
 _PCT_RE = re.compile(r"(\d+(?:\.\d+)?)\s?%")
-_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_SENT_SPLIT = re.compile(r"((?<=[.!?])\s+)")   # 구분 공백을 캡처해 서식(줄바꿈) 보존
 
 
 def _split_sentences(text: str) -> list[str]:
-    return [s for s in _SENT_SPLIT.split(text) if s.strip()]
+    """문장과 문장 사이 공백 토큰을 번갈아 반환 — ''.join으로 원본 서식 복원 가능."""
+    return [t for t in _SENT_SPLIT.split(text) if t != ""]
 
 
 def check_banned(text: str) -> tuple[str, list[dict]]:
@@ -67,19 +69,21 @@ def check_banned(text: str) -> tuple[str, list[dict]]:
             log.append({"category": "판단·권유형" if (pat, repl) in _JUDGEMENT_REPLACEMENTS
                         else "최상급·우위형", "found": m.group(0), "replaced": repl})
         text = pat.sub(repl, text)
-    sentences = _split_sentences(text)
-    out = []
-    for s in sentences:
+    out, last_sentence = [], None
+    for s in _split_sentences(text):
+        if not s.strip():          # 문장 사이 공백 토큰 — 서식 그대로 유지
+            out.append(s)
+            continue
         hit = next((p for p in _GUARANTEE_PATTERNS if p.search(s)), None)
         if hit:
             log.append({"category": "수익보장·오인형", "found": s.strip(),
                         "replaced": _GUARANTEE_SAFE_SENTENCE})
-            if out and out[-1] == _GUARANTEE_SAFE_SENTENCE:
+            if last_sentence == _GUARANTEE_SAFE_SENTENCE:
                 continue  # 안전 문장 중복 방지
-            out.append(_GUARANTEE_SAFE_SENTENCE)
-        else:
-            out.append(s)
-    return " ".join(out), log
+            s = _GUARANTEE_SAFE_SENTENCE
+        out.append(s)
+        last_sentence = s
+    return "".join(out), log
 
 
 def _allowed_numbers(turn: dict) -> set[float]:
@@ -103,10 +107,14 @@ def _allowed_numbers(turn: dict) -> set[float]:
 def check_numbers(text: str, turn: dict) -> tuple[str, list[dict]]:
     """수치 대조 lite (03 장치 ③): 응답 속 % 수치가 제공 집합에 없으면 해당 문장 치환."""
     allowed = _allowed_numbers(turn)
-    if not allowed:  # 수치를 제공하지 않은 턴(설명·질문)은 % 언급 자체를 검사 대상으로
-        allowed = set()
-    log, out = [], []
+    # 카드·비교표가 없는 턴(질문·일반 설명)에서는 "카드에서 확인" 안내가 성립하지 않는다
+    fallback = _NUM_FALLBACK_WITH_CARDS if (turn.get("candidates") or turn.get("comparison")) \
+        else _NUM_FALLBACK_NO_CARDS
+    log, out, last_sentence = [], [], None
     for s in _split_sentences(text):
+        if not s.strip():          # 문장 사이 공백 토큰 — 서식 그대로 유지
+            out.append(s)
+            continue
         bad = None
         for m in _PCT_RE.finditer(s):
             val = float(m.group(1))
@@ -117,10 +125,12 @@ def check_numbers(text: str, turn: dict) -> tuple[str, list[dict]]:
                 break
         if bad:
             log.append({"found": bad, "sentence": s.strip(), "action": "문장 치환"})
-            out.append(_NUM_FALLBACK_SENTENCE)
-        else:
-            out.append(s)
-    return " ".join(out), log
+            if last_sentence == fallback:
+                continue  # 치환 문장 중복 방지
+            s = fallback
+        out.append(s)
+        last_sentence = s
+    return "".join(out), log
 
 
 def run_safety(answer: str, turn: dict) -> tuple[str, dict]:

@@ -211,6 +211,81 @@ div[class*="st-key-chip_"] button p {{ font-size: 0.78rem !important; color: #0A
 .tp-node {{ font-size: 0.84rem; color: #1c1c1e; padding: 2px 0; }}
 .tp-tool {{ font-size: 0.76rem; color: #6e6e73; padding: 0 0 2px 18px; }}
 
+/* ---- Trace 실행 흐름 — 고정 토폴로지 다이어그램 (04 §5-1) ---- */
+.tp-graph {{ margin: 4px 0 6px; }}
+.tpg-node {{
+  border: 1px solid #E3E3E8; border-radius: 9px; background: #fff;
+  padding: 5px 8px; font-size: 0.78rem; text-align: center;
+  color: #1c1c1e; line-height: 1.4;
+}}
+.tpg-branch {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }}
+.tpg-branch .tpg-node {{ padding: 5px 2px; font-size: 0.72rem; }}
+.tpg-conn {{ width: 2px; height: 8px; background: #D9D9DE; margin: 2px auto; }}
+.tpg-node.on {{ border-color: #0A84FF; background: #EAF3FF; color: #0A5BD3; font-weight: 700; }}
+.tpg-node.run {{
+  border-color: #0A84FF; background: #0A84FF; color: #fff; font-weight: 700;
+  animation: tpg-glow 1s ease-in-out infinite;
+}}
+.tpg-node.off {{ color: #b9b9c0; background: #FAFAFB; border-style: dashed; }}
+.tpg-node.wait {{ color: #8E8E93; border-style: dashed; }}
+.tpg-node.err {{ border-color: #B25000; background: #FFF3E8; color: #B25000; font-weight: 700; }}
+@keyframes tpg-glow {{
+  0%, 100% {{ box-shadow: 0 0 0 0 rgba(10, 132, 255, .35); }}
+  50% {{ box-shadow: 0 0 0 5px rgba(10, 132, 255, .12); }}
+}}
+
+/* ---- Trace 검색 근거 — 벡터 유사도 막대 (04 §5-2) ---- */
+.tp-score-row {{
+  display: flex; align-items: center; gap: 6px;
+  font-size: 0.72rem; color: #4a4a4f; padding: 2px 0;
+}}
+.tp-score-code {{ flex: 0 0 86px; font-family: ui-monospace, monospace; }}
+.tp-score-bar {{
+  flex: 1 1 auto; height: 8px; background: #EFEFF2;
+  border-radius: 4px; overflow: hidden;
+}}
+.tp-score-bar i {{ display: block; height: 100%; background: #0A84FF; border-radius: 4px; }}
+.tp-score-val {{ flex: 0 0 40px; text-align: right; font-variant-numeric: tabular-nums; }}
+
+/* ---- Trace 안전 점검 — 가드레일 diff (04 §5-2) ---- */
+.tp-diff {{
+  font-size: 0.74rem; line-height: 1.6; padding: 4px 8px; margin: 2px 0;
+  background: #FAFAFB; border: 1px solid #ECECF0; border-radius: 8px; color: #3a3a3f;
+}}
+.tp-diff-cat {{
+  display: inline-block; font-size: 0.64rem; font-weight: 700; color: #8E8E93;
+  border: 1px solid #E3E3E8; border-radius: 6px; padding: 0 5px; margin-right: 6px;
+}}
+.tp-diff del {{ color: #C0392B; background: #FDEDEB; text-decoration: line-through; }}
+.tp-diff ins {{ color: #1E7B34; background: #EAF7EE; text-decoration: none; }}
+.tp-diff-arrow {{ margin: 0 5px; color: #8E8E93; }}
+
+/* ---- Trace 안전 점검 — 후속 칩 파이프라인 (04 §5-2) ---- */
+.tp-pipe {{ display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }}
+.tp-pipe-step {{
+  font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 8px;
+  border: 1px solid #E3E3E8; background: #fff; color: #4a4a4f;
+}}
+.tp-pipe-step.on {{ border-color: #0A84FF; color: #0A5BD3; background: #EAF3FF; }}
+.tp-pipe-step.ok {{ border-color: #34C759; color: #1E7B34; background: #EAF7EE; }}
+.tp-pipe-step.fail {{ border-color: #E0A030; color: #9a6a00; background: #FFF8E6; }}
+.tp-pipe-arrow {{ color: #8E8E93; font-size: 0.72rem; }}
+.tp-pipe-note {{ font-size: 0.68rem; color: #8E8E93; margin-top: 2px; }}
+
+/* ---- Trace 실시간 상태 라벨 (턴 실행 중) ---- */
+.tp-live-dot {{
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #0A84FF; margin: 0 7px 1px 1px;
+  animation: tp-pulse 1s ease-in-out infinite;
+}}
+.tp-live-label {{ font-size: 0.78rem; color: #0A5BD3; font-weight: 700; margin-top: 2px; }}
+.tp-live-label.err {{ color: #B25000; }}
+.tp-live-done {{ font-size: 0.74rem; color: #2e9e4f; font-weight: 700; margin-top: 4px; }}
+@keyframes tp-pulse {{
+  0%, 100% {{ opacity: .25; transform: scale(.75); }}
+  50% {{ opacity: 1; transform: scale(1); }}
+}}
+
 /* =========================================================
    스마트폰 프레임 (화면 1) — 동일 규격 {PHONE_W}x{PHONE_H}
    ========================================================= */

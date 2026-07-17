@@ -116,13 +116,16 @@ FIXTURE_COURSE_1 = {
         {
             "node": "postprocess",
             "kind": "safety",
-            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 excluded, 고지 1건",
+            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 excluded, 고지 1건"
+                       " · 후속 칩 rule(동적 칩 폐기: 칩 2개 미만)",
             "detail": {
                 "banned": [],
                 "numeric": [],
                 "notices": ["excluded"],
                 "disclosures": ["loss"],
                 "chips": [COURSE_2, COURSE_3, "수익률도 같이 보여줘"],
+                "chips_source": "rule",
+                "chips_drop_reason": "칩 2개 미만",
             },
         },
     ],
@@ -185,13 +188,16 @@ FIXTURE_COURSE_2 = {
         {
             "node": "postprocess",
             "kind": "safety",
-            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 해당 없음, 고지 1건",
+            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 해당 없음, 고지 1건"
+                       " · 후속 칩 rule(동적 칩 폐기: 칩 2개 미만)",
             "detail": {
                 "banned": [],
                 "numeric": [],
                 "notices": [],
                 "disclosures": ["loss"],
                 "chips": [COURSE_3, "두 상품 비용을 원 단위로 알려줘", "다른 후보도 보여줘"],
+                "chips_source": "rule",
+                "chips_drop_reason": "칩 2개 미만",
             },
         },
     ],
@@ -259,13 +265,16 @@ FIXTURE_COURSE_3 = {
         {
             "node": "postprocess",
             "kind": "safety",
-            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 해당 없음, 고지 1건",
+            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 해당 없음, 고지 1건"
+                       " · 후속 칩 rule(동적 칩 폐기: 칩 2개 미만)",
             "detail": {
                 "banned": [],
                 "numeric": [],
                 "notices": [],
                 "disclosures": ["loss"],
                 "chips": ["③번 펀드와도 겹치는지 봐줘", COURSE_2, "다른 조건으로 다시 찾아보기"],
+                "chips_source": "rule",
+                "chips_drop_reason": "칩 2개 미만",
             },
         },
     ],
@@ -318,13 +327,16 @@ FIXTURE_COURSE_4 = {
         {
             "node": "postprocess",
             "kind": "safety",
-            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 blocked, 고지 1건",
+            "summary": "안전 점검: 금칙 치환 0건, 수치 교정 0건, 안내 blocked, 고지 1건"
+                       " · 후속 칩 rule",
             "detail": {
                 "banned": [],
                 "numeric": [],
                 "notices": ["blocked"],
                 "disclosures": ["info"],
                 "chips": ["가입 가능한 범위에서 찾아보기", "이전 후보로 돌아가기"],
+                "chips_source": "rule",
+                "chips_drop_reason": None,
             },
         },
     ],

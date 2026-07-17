@@ -1,5 +1,6 @@
 # 환경·비밀
 .env
+.streamlit/secrets.toml
 .venv/
 venv/
 

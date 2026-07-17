@@ -44,8 +44,11 @@ class RouteResult(BaseModel):
 def _get_llm():
     global _llm
     if _llm is None:
-        from langchain_openai import ChatOpenAI
-        _llm = ChatOpenAI(model="gpt-4o-mini", temperature=0).with_structured_output(RouteResult)
+        from langchain_anthropic import ChatAnthropic
+        # 라우터는 상위 모델 — 분류·조건 추출이 품질 레버, 토큰이 적어 지연 영향 미미 (02 §9)
+        # claude-sonnet-5는 temperature 미지원(deprecated) — 기본값 사용
+        _llm = ChatAnthropic(model="claude-sonnet-5",
+                             max_tokens=2048).with_structured_output(RouteResult)
     return _llm
 
 

@@ -38,7 +38,7 @@ LangGraph 백엔드 + Streamlit 시연 UI + 노션 발표자료가 최종 산출
 
 ## 기술 스택·규약
 
-- Python + LangGraph, `gpt-4o-mini`, `text-embedding-3-small`, `InMemoryVectorStore`, `InMemorySaver` (02 §9 채택표 준수 — ReAct·멀티에이전트·Store·HITL 도입 금지)
+- Python + LangGraph, Anthropic Claude(라우터 `claude-sonnet-5` / 응답·칩 생성 `claude-haiku-4-5`), 임베딩은 OpenAI `text-embedding-3-small` 유지, `InMemoryVectorStore`, `InMemorySaver` (02 §9 채택표 준수 — ReAct·멀티에이전트·Store·HITL 도입 금지)
 - API 키는 `.env`만 사용, 하드코딩·커밋 금지
 - `펀드정보.xlsx`(311건)는 원본 — 수정 금지. 파생 데이터는 `build_data.py`로만 생성
 - 날짜 가정: 전 상품 기준일 `2026-06-30` (01 11-3)

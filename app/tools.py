@@ -158,14 +158,17 @@ def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int 
 
     blocked = (len(pool) == 0 and excluded_by_risk > 0)
 
+    scores = None   # 벡터 랭킹 턴만 채움 — trace 검색 근거 표시용 (02 §6, 03 §9)
     if cost_sensitive:
         ranked = sorted(pool, key=lambda c: funds[c]["fee_pct"])
         ranking_mode = "연간 비용 낮은 순 (정형 정렬)"
     elif query_text and len(pool) > k:
         qv = _embed_query(query_text)
         emb, idx = store.embeddings(), store.code_index()
-        ranked = sorted(pool, key=lambda c: -(emb[idx[c]] @ qv))
+        sims = {c: float(emb[idx[c]] @ qv) for c in pool}
+        ranked = sorted(pool, key=lambda c: -sims[c])
         ranking_mode = "조건 일치 상품 내 의미 유사도 순 (벡터)"
+        scores = {c: round(sims[c], 3) for c in ranked[:k]}
     else:
         ranked = sorted(pool, key=lambda c: funds[c]["fee_pct"])
         ranking_mode = "조건 일치 상품 (비용 순 표시)"
@@ -192,7 +195,7 @@ def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int 
 
     return {"candidates": candidates, "excluded_by_risk": excluded_by_risk,
             "blocked": blocked, "pool_size": len(pool),
-            "ranking_mode": ranking_mode, "applied": applied}
+            "ranking_mode": ranking_mode, "applied": applied, "scores": scores}
 
 
 def calc_annual_cost(fee_pct: float, amount: int, contribution_type: str) -> str:
