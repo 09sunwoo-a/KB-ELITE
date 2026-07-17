@@ -1,0 +1,50 @@
+{
+  "customer_id": "P3",
+  "name": "최준혁",
+  "age": 42,
+  "risk_profile": "적극투자형",
+  "investment_context": {
+    "goal": "여유자금 운용",
+    "horizon_years": 5,
+    "liquidity_need": "낮음",
+    "loss_tolerance": "높음",
+    "contribution": { "type": "lumpsum", "amount": 20000000 }
+  },
+  "account_context": { "account_type": "일반" },
+  "interaction_preference": { "response_length": "concise", "explanation_level": "experienced" },
+  "holdings": [
+    {
+      "kind": "stock",
+      "security_code": "NVDA",
+      "name": "엔비디아",
+      "market_value": 12000000,
+      "portfolio_weight": 0.30,
+      "as_of_date": "2026-07-16"
+    },
+    {
+      "kind": "stock",
+      "security_code": "TSLA",
+      "name": "테슬라",
+      "market_value": 6000000,
+      "portfolio_weight": 0.15,
+      "as_of_date": "2026-07-16"
+    },
+    {
+      "kind": "fund",
+      "product_code": "KF04000529",
+      "name": "KB 밸류 포커스 증권자투자신탁(주식)-C-E",
+      "fund_type": "주식형",
+      "region": "국내",
+      "risk_grade": "높은위험",
+      "market_value": 8000000,
+      "portfolio_weight": 0.20,
+      "top_holdings": [
+        { "name": "SK하이닉스" },
+        { "name": "이수페타시스" },
+        { "name": "삼양식품" }
+      ],
+      "as_of_date": "2026-06-30"
+    }
+  ],
+  "search_history": ["나스닥 펀드", "반도체", "엔비디아 펀드"]
+}

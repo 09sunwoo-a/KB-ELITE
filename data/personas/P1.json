@@ -1,0 +1,17 @@
+{
+  "customer_id": "P1",
+  "name": "서지우",
+  "age": 26,
+  "risk_profile": "안정추구형",
+  "investment_context": {
+    "goal": null,
+    "horizon_years": null,
+    "liquidity_need": null,
+    "loss_tolerance": null,
+    "contribution": { "type": "monthly", "amount": 200000 }
+  },
+  "account_context": { "account_type": "일반" },
+  "interaction_preference": { "response_length": null, "explanation_level": null },
+  "holdings": [],
+  "search_history": []
+}

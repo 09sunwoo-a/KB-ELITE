@@ -1,0 +1,38 @@
+{
+  "customer_id": "P4",
+  "name": "정미숙",
+  "age": 55,
+  "risk_profile": "안정형",
+  "investment_context": {
+    "goal": "생활자금 보조",
+    "horizon_years": null,
+    "liquidity_need": "중간",
+    "loss_tolerance": "매우 낮음",
+    "contribution": { "type": "lumpsum", "amount": 50000000 }
+  },
+  "account_context": { "account_type": "일반" },
+  "interaction_preference": { "response_length": null, "explanation_level": null },
+  "holdings": [
+    {
+      "kind": "fund",
+      "product_code": "KF04000398",
+      "name": "KB스타 개인용 MMF P-101호(국공채) C",
+      "fund_type": "MMF",
+      "region": "국내",
+      "risk_grade": "매우낮은위험",
+      "market_value": 20000000,
+      "as_of_date": "2026-06-30"
+    },
+    {
+      "kind": "fund",
+      "product_code": "KF04001560",
+      "name": "KB스타 중기 국공채 증권 자투자신탁(채권)-CE",
+      "fund_type": "채권형",
+      "region": "국내",
+      "risk_grade": "낮은위험",
+      "market_value": 15000000,
+      "as_of_date": "2026-06-30"
+    }
+  ],
+  "search_history": ["배당 펀드", "월지급식", "원금보장"]
+}

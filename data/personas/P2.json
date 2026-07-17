@@ -1,0 +1,33 @@
+{
+  "customer_id": "P2",
+  "name": "박서연",
+  "age": 34,
+  "risk_profile": "위험중립형",
+  "investment_context": {
+    "goal": "노후 준비",
+    "horizon_years": null,
+    "liquidity_need": "낮음",
+    "loss_tolerance": null,
+    "contribution": { "type": "monthly", "amount": 500000 }
+  },
+  "account_context": { "account_type": "IRP" },
+  "interaction_preference": { "response_length": null, "explanation_level": null },
+  "holdings": [
+    {
+      "kind": "fund",
+      "product_code": "KF04001379",
+      "name": "피델리티 미국 증권 자투자신탁(주식-재간접형) Ce",
+      "fund_type": "주식형",
+      "region": "미국",
+      "risk_grade": "다소높은위험",
+      "market_value": 12000000,
+      "top_holdings": [
+        { "name": "엔비디아" },
+        { "name": "마이크로소프트" },
+        { "name": "알파벳" }
+      ],
+      "as_of_date": "2026-06-30"
+    }
+  ],
+  "search_history": ["TDF", "연금저축펀드", "IRP"]
+}
