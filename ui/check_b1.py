@@ -11,6 +11,9 @@ from streamlit.testing.v1 import AppTest
 
 APP = str(Path(__file__).parent / "streamlit_app.py")
 
+sys.path.insert(0, str(Path(__file__).parent))
+from mock_fixtures import COURSE_1, COURSE_2, COURSE_3, COURSE_4  # noqa: E402
+
 results = []
 
 
@@ -43,7 +46,7 @@ thread_c = at.session_state["thread_id"]
 opening_c = msgs[0]["content"]
 
 print("③ 시연 코스 ① 클릭 → Mock 응답 렌더")
-at.button(key="course_1").click().run()
+at.chat_input[0].set_value(COURSE_1).run()
 msgs = at.session_state["messages"]
 check("메시지 3건 (오프닝/사용자/응답)", len(msgs) == 3, f"실제 {len(msgs)}건")
 check("사용자 메시지 = 코스 ① 문구", msgs[1]["content"].startswith("엔비디아"))
@@ -55,24 +58,24 @@ check("trace_events 누적", len(at.session_state["trace_events"]) == 1)
 check("MOCK TRACE 배지 유지", has_badge(at))
 
 print("④ 코스 ② 연속 실행 — 멀티턴")
-at.button(key="course_2").click().run()
+at.chat_input[0].set_value(COURSE_2).run()
 msgs = at.session_state["messages"]
 check("메시지 5건", len(msgs) == 5, f"실제 {len(msgs)}건")
 check("비교 응답", "차이" in msgs[4]["content"])
 check("탐색 기준 유지(멀티턴)", at.session_state["conditions"].get("target_stock") == "엔비디아")
 
 print("⑤ 페르소나 전환 → 초기화 + 오프닝 상이")
-at.radio(key="persona_radio").set_value("P4").run()
+at.radio(key="persona_radio").set_value("P1").run()
 msgs = at.session_state["messages"]
-check("persona_id == P4", at.session_state["persona_id"] == "P4")
+check("persona_id == P1", at.session_state["persona_id"] == "P1")
 check("대화 초기화(오프닝 1건만)", len(msgs) == 1)
 check("thread_id 재발급(재사용 금지)", at.session_state["thread_id"] != thread_c)
-check("정미숙 오프닝 ≠ 최준혁 오프닝", msgs[0]["content"] != opening_c and "정미숙 고객님" in msgs[0]["content"])
-check("정미숙 칩 상이", msgs[0]["chips"][0] == "펀드도 원금이 보장되나요?")
+check("서지우 오프닝 ≠ 최준혁 오프닝", msgs[0]["content"] != opening_c and "서지우 고객님" in msgs[0]["content"])
+check("서지우 칩 상이", msgs[0]["chips"][0] == "예금·적금과 펀드는 뭐가 다른가요?")
 check("trace_events 초기화", len(at.session_state["trace_events"]) == 0)
 
-print("⑥ 정미숙 코스 ④ — 차단 케이스 응답")
-at.button(key="course_4").click().run()
+print("⑥ 서지우 코스 ④ — 차단 케이스 응답")
+at.chat_input[0].set_value(COURSE_4).run()
 msgs = at.session_state["messages"]
 last = msgs[-1]
 check("차단 안내 서술", "후보로 안내해 드리지 않아요" in last["content"])
@@ -84,12 +87,12 @@ at.chat_input[0].set_value("아무거나 물어볼게요").run()
 msgs = at.session_state["messages"]
 check("고정 안내 응답", "시연 코스 버튼" in msgs[-1]["content"])
 
-print("⑧ 페르소나 4인 오프닝 전부 상이")
+print("⑧ 시연 페르소나 2인 오프닝 상이")
 openings = set()
-for pid in ["P3", "P4", "P2", "P1"]:
+for pid in ["P3", "P1"]:
     at.radio(key="persona_radio").set_value(pid).run()
     openings.add(at.session_state["messages"][0]["content"])
-check("오프닝 4종 모두 다름", len(openings) == 4)
+check("오프닝 2종 모두 다름", len(openings) == 2)
 
 print("⑨ 예외·오류")
 check("스크립트 예외 0건", not at.exception, str([e.value for e in at.exception]))

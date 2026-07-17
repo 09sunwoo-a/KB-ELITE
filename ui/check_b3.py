@@ -11,6 +11,9 @@ from streamlit.testing.v1 import AppTest
 
 APP = str(Path(__file__).parent / "streamlit_app.py")
 
+sys.path.insert(0, str(Path(__file__).parent))
+from mock_fixtures import COURSE_1, COURSE_2, COURSE_3, COURSE_4  # noqa: E402
+
 results = []
 
 
@@ -23,18 +26,15 @@ def all_markdown(at):
     return "\n".join(str(md.value) for md in at.markdown)
 
 
-print("① 토글 ON + 빈 상태")
+print("① 챗 진입 — 패널 상시 표시 + 빈 상태")
 at = AppTest.from_file(APP, default_timeout=60).run()
 at.button(key="ai_fab").click().run()
-at.toggle(key="trace_visible").set_value(True).run()
 md = all_markdown(at)
 check("배지 표시(패널)", md.count("MOCK TRACE") >= 2)  # 사이드바 + 패널
 check("빈 상태 안내", any("아직 실행된 턴" in str(c.value) for c in at.caption))
 
 print("② 코스 ① 실행 후 — 현재 행동·실행 흐름·도구 들여쓰기")
-at.button(key="course_1").click().run()
-# AppTest는 토글 위젯 상태를 상호작용 간 유지하지 않으므로 다시 켠다(실브라우저는 유지)
-at.toggle(key="trace_visible").set_value(True).run()
+at.chat_input[0].set_value(COURSE_1).run()
 md = all_markdown(at)
 check("현재 행동: action + 이유", "SEARCH" in md and "추가 질문 없이 검색" in md)
 check("노드 표시명: 질문 의도 파악·행동 선택", "질문 의도 파악·행동 선택" in md)
@@ -53,10 +53,9 @@ check("안전 점검 체크리스트", "✅ 금칙 표현 검사 (치환 0건)" 
 check("성향 초과 차단 경고(4건)", "⚠ 성향 초과 상품 4건 노출 차단" in md)
 check("탐색 노트: 추출 조건", "이번 발화에서 추출" in md)
 
-print("④ 정미숙 코스 ④ — blocked 턴 trace")
-at.radio(key="persona_radio").set_value("P4").run()
-at.button(key="course_4").click().run()
-at.toggle(key="trace_visible").set_value(True).run()
+print("④ 서지우 코스 ④ — blocked 턴 trace")
+at.radio(key="persona_radio").set_value("P1").run()
+at.chat_input[0].set_value(COURSE_4).run()
 md = all_markdown(at)
 check("차단 경고(10건)", "⚠ 성향 초과 상품 10건 전부 노출 차단" in md)
 check("blocked 검색 요약", "전부 차단(blocked)" in md)

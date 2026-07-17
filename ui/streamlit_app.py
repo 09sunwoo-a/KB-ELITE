@@ -18,10 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import components  # noqa: E402
 import trace_panel  # noqa: E402
 from adapter import AdapterConnectionError, create_adapter, default_mode  # noqa: E402
-from mock_fixtures import (  # noqa: E402
-    COURSE_1, COURSE_2, COURSE_3, COURSE_4,
-    PERSONA_ORDER, PERSONAS, RISK_GRADE_BY_SCORE,
-)
+from mock_fixtures import PERSONA_ORDER, PERSONAS, RISK_GRADE_BY_SCORE  # noqa: E402
 from styles import AUTOSCROLL_JS, CSS, mode_badge_html  # noqa: E402
 
 ASSETS_DIR = Path(__file__).parent.parent / "assets"
@@ -51,7 +48,6 @@ def init_state():
         "persona_id": PERSONA_ORDER[0],
         "thread_id": None,
         "agent_mode": None,          # None → 최초 진입 시 default_mode()로 결정
-        "trace_visible": False,
         "messages": [],
         "conditions": {},
         "last_candidates": [],
@@ -112,44 +108,51 @@ def start_chat():
 # ---------------------------------------------------------------------------
 
 def render_sidebar():
+    """고객 시나리오 패널 — 배경(은행이 아는 것) → 개인화 결과의 인과를 보여준다."""
     with st.sidebar:
-        st.markdown("### 🎛 시연 조종석")
         st.radio(
-            "페르소나",
+            "고객 시나리오 선택",
             PERSONA_ORDER,
-            format_func=lambda pid: PERSONAS[pid]["label"],
+            format_func=lambda pid: (
+                f"{PERSONAS[pid]['name']} ({PERSONAS[pid]['age']}) · {PERSONAS[pid]['risk_profile']}"
+            ),
+            captions=[PERSONAS[pid]["tagline"] for pid in PERSONA_ORDER],
             key="persona_radio",
             index=PERSONA_ORDER.index(st.session_state.persona_id),
             on_change=on_persona_change,
         )
 
         persona = PERSONAS[st.session_state.persona_id]
-        st.markdown("**고객 컨텍스트**")
-        for label, value in persona["context"].items():
-            st.markdown(
-                f"<div style='font-size:0.82rem; color:#5a5344; margin-bottom:2px'>"
-                f"<b>{label}</b> — {value}</div>",
-                unsafe_allow_html=True,
-            )
+        context_rows = "".join(
+            f'<div class="sb-row"><b>{label}</b> — {value}</div>'
+            for label, value in persona["context"].items()
+        )
+        st.markdown(
+            f"""
+            <div class="sb-card">
+              <div class="sb-title">🏦 은행이 이미 아는 고객 정보</div>
+              {context_rows}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        points = "".join(
+            f'<div class="sb-pt"><span class="arrow">→</span><span>{p}</span></div>'
+            for p in persona["personalization"]
+        )
+        st.markdown(
+            f"""
+            <div class="sb-card sb-pts">
+              <div class="sb-title">✨ 그래서 에이전트는 이렇게 달라져요</div>
+              {points}
+              <div class="sb-note">개인 데이터를 복창하거나 특정 상품을 먼저 권하지는 않아요</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         st.divider()
-        st.markdown("**시연 코스** (클릭 → 실제 입력으로 주입)")
-        courses = [
-            ("course_1", "① 조건으로 바로 찾기", COURSE_1),
-            ("course_2", "② 후보 상품 비교", COURSE_2),
-            ("course_3", "③ 보유종목 겹침 확인", COURSE_3),
-            ("course_4", "④ AI 펀드 위험 확인", COURSE_4),
-        ]
-        for key, label, prompt in courses:
-            if st.button(label, key=key, use_container_width=True):
-                if st.session_state.screen != "chat":
-                    start_chat()
-                st.session_state.pending_prompt = prompt
-                st.rerun()
-        st.caption("④는 페르소나에 따라 결과가 달라져요 (정미숙: 차단 / 최준혁: 정상 — 교차는 Live에서)")
-
-        st.divider()
-        st.toggle("Agent 동작 보기", key="trace_visible")
         if st.button("대화 초기화", use_container_width=True):
             reset_conversation()
             st.rerun()
@@ -188,10 +191,6 @@ def phone_screen_html() -> tuple[str, str]:
 
 
 def render_fund_home():
-    st.markdown(
-        "<h4 style='text-align:center; margin-bottom:0.4rem'>스타뱅킹 · 펀드</h4>",
-        unsafe_allow_html=True,
-    )
     _, mid, _ = st.columns([1, 1.4, 1])
     with mid:
         screen_html, screen_cls = phone_screen_html()
@@ -331,14 +330,12 @@ def render_chat():
             st.rerun()
         return
 
-    if st.session_state.trace_visible:
-        chat_col, trace_col = st.columns([1.6, 1.0])
-        with trace_col:
-            trace_panel.render_trace_panel(
-                st.session_state.agent_mode, st.session_state.trace_events
-            )
-    else:
-        chat_col = st.container()
+    # trace 패널 상시 표시 (04 §2 — 토글 없음)
+    chat_col, trace_col = st.columns([1.6, 1.0])
+    with trace_col:
+        trace_panel.render_trace_panel(
+            st.session_state.agent_mode, st.session_state.trace_events
+        )
 
     prompt = st.session_state.pop("pending_prompt", None)
 
@@ -362,11 +359,8 @@ def render_chat():
             if typed:
                 prompt = typed
 
-        st.markdown(
-            f"<div style='text-align:center; margin-top:6px'>{mode_badge_html(st.session_state.agent_mode)}"
-            "<span style='color:#9a927e; font-size:0.72rem; margin-left:8px'>Prototype · 시연용</span></div>",
-            unsafe_allow_html=True,
-        )
+        # 배지는 사이드바·trace 패널에만 표시 — 폰 아래 요소를 없애
+        # 화면 1(서브메인)과 화면 2(챗)의 세로 규격을 동일하게 유지한다
         # nonce로 매 rerun마다 스크립트를 재마운트시킨다 (같은 내용이면 재실행 안 됨)
         st_components.html(AUTOSCROLL_JS + f"<!-- {uuid.uuid4()} -->", height=0)
 
@@ -378,7 +372,10 @@ def render_chat():
 # ---------------------------------------------------------------------------
 
 def main():
-    st.set_page_config(page_title="AI 펀드 길잡이 — 시연", page_icon="🧭", layout="wide")
+    st.set_page_config(
+        page_title="AI 펀드 길잡이 — 시연", page_icon="🧭", layout="wide",
+        initial_sidebar_state="expanded",
+    )
     st.markdown(CSS, unsafe_allow_html=True)
     init_state()
     render_sidebar()

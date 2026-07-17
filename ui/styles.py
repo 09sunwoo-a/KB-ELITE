@@ -16,6 +16,29 @@ CSS = f"""
 .stApp {{ background: #F6F4EE; }}
 .block-container {{ padding-top: 1.2rem; padding-bottom: 1rem; }}
 
+/* ---- 사이드바 고정형 — 접기 버튼 숨김 (04 §3-5) ---- */
+[data-testid="stSidebarCollapseButton"] {{ display: none !important; }}
+[data-testid="stSidebar"] {{ min-width: 300px; }}
+
+/* ---- 사이드바 고객 시나리오 카드 ---- */
+.sb-card {{
+  background: #fff; border: 1px solid #E8E4DA; border-radius: 12px;
+  padding: 10px 12px; margin: 8px 0;
+}}
+.sb-card .sb-title {{
+  font-size: 0.72rem; font-weight: 800; color: #8a8272;
+  margin-bottom: 7px; letter-spacing: 0.02em;
+}}
+.sb-row {{ font-size: 0.79rem; color: #4a4437; margin-bottom: 4px; line-height: 1.5; }}
+.sb-row b {{ color: #2f2b22; }}
+.sb-card.sb-pts {{ background: #FFFBEB; border-color: #F5E6A8; }}
+.sb-pt {{
+  font-size: 0.78rem; color: #6a5a10; margin-bottom: 6px; line-height: 1.5;
+  display: flex; gap: 6px;
+}}
+.sb-pt .arrow {{ flex: 0 0 auto; font-weight: 800; color: #c9a30a; }}
+.sb-note {{ font-size: 0.68rem; color: #a89a5a; margin-top: 6px; }}
+
 /* ---- 모드 배지 ---- */
 .mode-badge {{
   display: inline-block; padding: 3px 12px; border-radius: 999px;

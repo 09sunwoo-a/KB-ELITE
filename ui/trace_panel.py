@@ -136,7 +136,7 @@ def _safety_tab(event: dict):
 def render_trace_panel(agent_mode: str, trace_events: list):
     """trace 컬럼 전체 렌더링 (04 §5-1 구성: 배지 → 현재 행동 → 흐름 → 탭 4개)."""
     st.markdown(
-        f"<div style='margin-top:12px'>{mode_badge_html(agent_mode)}</div>",
+        f"<div style='margin-top:24px'>{mode_badge_html(agent_mode)}</div>",
         unsafe_allow_html=True,
     )
 
