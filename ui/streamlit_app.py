@@ -5,6 +5,7 @@
 """
 import base64
 import html as html_mod
+import os
 import sys
 import time
 import uuid
@@ -14,6 +15,30 @@ import streamlit as st
 import streamlit.components.v1 as st_components
 
 sys.path.insert(0, str(Path(__file__).parent))
+
+
+def _load_credentials():
+    """키·모드 설정을 os.environ에 채운다 (default_mode·app.* 가 os.getenv로 읽음).
+
+    1) 로컬: .env 로드 (없으면 무시).
+    2) Streamlit Cloud: 대시보드 Secrets를 os.environ으로 복사.
+       (OPENAI_API_KEY·ANTHROPIC_API_KEY·AGENT_MODE. 이미 있으면 덮지 않음)
+    둘 다 없으면 조용히 통과 → 앱은 mock 모드로 시연된다.
+    """
+    try:
+        from dotenv import load_dotenv
+        load_dotenv()
+    except Exception:
+        pass
+    try:
+        for key in ("OPENAI_API_KEY", "ANTHROPIC_API_KEY", "AGENT_MODE"):
+            if key in st.secrets and not os.environ.get(key):
+                os.environ[key] = str(st.secrets[key])
+    except Exception:
+        pass  # 로컬: secrets.toml 부재 → .env 경로 사용
+
+
+_load_credentials()
 
 import components  # noqa: E402
 import trace_panel  # noqa: E402

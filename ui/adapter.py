@@ -203,8 +203,16 @@ class LangGraphAgentAdapter:
 
 
 def default_mode() -> str:
-    """환경변수 AGENT_MODE(기본 mock). 04 §7: live는 명시적 opt-in."""
-    return os.getenv("AGENT_MODE", "mock").strip().lower()
+    """AGENT_MODE가 있으면 그 값, 없으면 키 존재로 자동 결정.
+
+    - AGENT_MODE 지정 시 그대로(mock/live) — 명시적 opt-in/opt-out이 항상 우선.
+    - 미지정 시: ANTHROPIC_API_KEY가 있으면 live, 없으면 mock(키 없이도 UI 시연).
+      → Streamlit Cloud에 키만 넣으면 별도 설정 없이 live로 뜬다.
+    """
+    explicit = os.getenv("AGENT_MODE")
+    if explicit and explicit.strip():
+        return explicit.strip().lower()
+    return "live" if os.getenv("ANTHROPIC_API_KEY") else "mock"
 
 
 def create_adapter(mode: str) -> AgentAdapter:
