@@ -16,6 +16,7 @@ import streamlit.components.v1 as st_components
 sys.path.insert(0, str(Path(__file__).parent))
 
 import components  # noqa: E402
+import trace_panel  # noqa: E402
 from adapter import AdapterConnectionError, create_adapter, default_mode  # noqa: E402
 from mock_fixtures import (  # noqa: E402
     COURSE_1, COURSE_2, COURSE_3, COURSE_4,
@@ -329,8 +330,9 @@ def render_chat():
     if st.session_state.trace_visible:
         chat_col, trace_col = st.columns([1.6, 1.0])
         with trace_col:
-            st.markdown(mode_badge_html(st.session_state.agent_mode), unsafe_allow_html=True)
-            st.caption("Agent 동작 패널은 B3 단계에서 구현됩니다.")
+            trace_panel.render_trace_panel(
+                st.session_state.agent_mode, st.session_state.trace_events
+            )
     else:
         chat_col = st.container()
 

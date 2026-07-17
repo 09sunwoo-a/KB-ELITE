@@ -179,6 +179,15 @@ div[class*="st-key-chip_"] button p {{ font-size: 0.78rem !important; color: #0A
 }}
 .st-key-chat_phone [data-testid="stChatInput"]:focus-within {{ border-color: #0A84FF; }}
 
+/* ---- Trace 패널 (04 §5) ---- */
+.tp-action {{
+  background: #fff; border: 1px solid #E3E3E8; border-radius: 12px;
+  padding: 9px 12px; margin: 8px 0; font-size: 0.82rem; color: #1c1c1e; line-height: 1.55;
+}}
+.tp-title {{ font-size: 0.76rem; font-weight: 700; color: #8E8E93; margin: 4px 0 2px; }}
+.tp-node {{ font-size: 0.84rem; color: #1c1c1e; padding: 2px 0; }}
+.tp-tool {{ font-size: 0.76rem; color: #6e6e73; padding: 0 0 2px 18px; }}
+
 /* =========================================================
    스마트폰 프레임 (화면 1) — 동일 규격 {PHONE_W}x{PHONE_H}
    ========================================================= */
