@@ -11,6 +11,10 @@ PERSONA_LABELS = {
     "P4": "정미숙 · 원금 민감형",
 }
 
+# 시연 노출 페르소나 (01 §7-1, 2026-07-18 확정) — P2·P4는 테스트 데이터로만 유지.
+# UI 사이드바는 이 목록만 표시한다.
+DEMO_PERSONAS = ["P3", "P1"]
+
 
 def load_profile(persona_id: str) -> dict:
     """State 초기값: profile + max_risk_score. 세션(thread) 시작 시 1회."""

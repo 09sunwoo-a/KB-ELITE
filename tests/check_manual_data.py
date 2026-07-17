@@ -12,7 +12,7 @@ TERMS = json.load(open("data/terms.json", encoding="utf-8"))
 
 # 01 4-2 성향 → 노출 상한 매핑 (A5에서 app/personas.py로 이관 예정)
 MAX_RISK = {"안정형": 2, "안정추구형": 3, "위험중립형": 4, "적극투자형": 5, "공격투자형": 6}
-EXPECT_CAP = {"P1": 3, "P2": 4, "P3": 5, "P4": 2}
+EXPECT_CAP = {"P1": 3, "P2": 4, "P3": 6, "P4": 2}  # P3 공격투자형 (2026-07-18)
 
 fail = 0
 

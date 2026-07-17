@@ -127,7 +127,7 @@ def test_B_parkseoyeon_pension(graph):
     retry_scenario(scenario, graph, "P2")
 
 
-# ── C. 최준혁 (적극투자형, 상한 5) — 스피드 코스 ──────────────────
+# ── C. 최준혁 (공격투자형, 상한 6 — 전 상품 노출) — 스피드 코스 ────
 
 def test_C_choijunhyuk_speed(graph):
     def scenario(s):
@@ -137,7 +137,7 @@ def test_C_choijunhyuk_speed(graph):
         assert cards and all("엔비디아" in c["matched_stocks"] for c in cards)
         fees = [c["fee_pct"] for c in cards]
         assert fees == sorted(fees), "비용 오름차순 아님"
-        assert t1["risk_block"]["excluded_by_risk"] == 4, "성향 초과 제외 4건 기대"
+        assert t1.get("risk_block") is None, "공격투자형은 성향 초과 제외가 없어야 함"
 
         t2 = s.send("1번과 3번 비교해줘.")
         assert t2["action"] == "compare"
@@ -191,10 +191,10 @@ def test_D_jeongmisook_block(graph):
 def test_cross_same_question(graph):
     def scenario_p3(s):
         t = s.send("요즘 AI 펀드 어때요?")
-        assert t["candidates"], "적극투자형은 후보가 노출되어야 함"
-        from app import store
-        assert all(store.funds()[c["fund_code"]]["risk_score"] <= 5 for c in t["candidates"])
+        assert t["candidates"], "공격투자형은 후보가 노출되어야 함"
         assert not (t.get("risk_block") or {}).get("blocked", False)
+        assert (t.get("risk_block") or {}).get("excluded_by_risk", 0) == 0, \
+            "공격투자형은 제외 0건이어야 함"
 
     def scenario_p4(s):
         t = s.send("요즘 AI 펀드 어때요?")

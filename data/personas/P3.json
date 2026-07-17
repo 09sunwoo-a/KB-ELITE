@@ -2,7 +2,7 @@
   "customer_id": "P3",
   "name": "최준혁",
   "age": 42,
-  "risk_profile": "적극투자형",
+  "risk_profile": "공격투자형",
   "investment_context": {
     "goal": "여유자금 운용",
     "horizon_years": 5,

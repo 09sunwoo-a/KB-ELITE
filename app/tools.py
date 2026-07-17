@@ -83,6 +83,7 @@ def _make_card(code: str, f: dict, reasons: list[str], target_stocks: list[str])
     """04 §6-3 후보 카드 — funds.json 필드만 사용, selection_reason은 코드 생성."""
     matched = [s for s in target_stocks if s in f["matched_aliases"]] \
         or f["matched_aliases"][:3]
+    m12 = f["returns"]["m12"]
     return {
         "fund_code": code,
         "name": f["name"],
@@ -90,8 +91,12 @@ def _make_card(code: str, f: dict, reasons: list[str], target_stocks: list[str])
         "region": f["region"],
         "risk_grade": f["risk_grade"],
         "fee_pct": f["fee_pct"],
+        "manager": f["manager"],
         "matched_stocks": matched,
-        "returns_display": None,  # 고객 요청 시 행동 노드가 채움 (기준기간 병기)
+        "top_stocks_summary": (", ".join(f["matched_aliases"]) or None)
+                              if f["has_holdings_info"] else None,
+        # 04 §6-3 (2026-07-18): 기본 12개월 수익률 표시, 기준기간·기준일 병기
+        "returns_display": {"period": "12개월", "value": m12} if m12 is not None else None,
         "selection_reason": ", ".join(reasons) if reasons else "탐색 조건과의 관련성 순",
         "as_of": f["as_of"],
     }

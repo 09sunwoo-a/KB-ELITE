@@ -87,6 +87,9 @@ def _allowed_numbers(turn: dict) -> set[float]:
     nums = set()
     for c in turn.get("candidates") or []:
         nums.add(float(c["fee_pct"]))
+        rd = c.get("returns_display")
+        if rd and rd.get("value") is not None:
+            nums.add(float(rd["value"]))
     for row in (turn.get("comparison") or {}).get("rows", []):
         for v in row["values"]:
             if isinstance(v, (int, float)):
