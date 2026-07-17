@@ -1,175 +1,187 @@
 # -*- coding: utf-8 -*-
-"""폰 프레임·채팅 말풍선·배지 CSS (04 §9). B2에서 카드 스타일 확장 예정."""
+"""폰 프레임·채팅 말풍선·배지 CSS (04 §9). B2에서 카드 스타일 확장 예정.
 
-KB_YELLOW = "#FFCC00"
-KB_DARK = "#60584C"
+레이아웃 원칙 (2026-07-18 사용자 결정):
+- 화면 1(서브메인)과 화면 2(챗)의 폰 프레임 규격은 410 x 812px로 완전 동일 고정.
+- 챗 내부는 헤더/조건바/입력창 고정, 메시지 영역만 flex로 유동. 칩은 대화 흐름 안.
+- 룩앤필: iMessage/ChatGPT 톤 (흰 배경, 회색 봇 말풍선, 파란 사용자 말풍선).
+"""
 
-CSS = """
+PHONE_W = 410
+PHONE_H = 812
+
+CSS = f"""
 <style>
 /* ---- 앱 공통 ---- */
-.stApp { background: #F6F4EE; }
-.block-container { padding-top: 1.4rem; padding-bottom: 1rem; }
+.stApp {{ background: #F6F4EE; }}
+.block-container {{ padding-top: 1.2rem; padding-bottom: 1rem; }}
 
 /* ---- 모드 배지 ---- */
-.mode-badge {
+.mode-badge {{
   display: inline-block; padding: 3px 12px; border-radius: 999px;
   font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; white-space: nowrap;
-}
-.mode-badge.mock { background: #FFF3CD; color: #7a5c00; border: 1px solid #ffe08a; }
-.mode-badge.live { background: #D1F0D9; color: #14532d; border: 1px solid #86dba2; }
+}}
+.mode-badge.mock {{ background: #FFF3CD; color: #7a5c00; border: 1px solid #ffe08a; }}
+.mode-badge.live {{ background: #D1F0D9; color: #14532d; border: 1px solid #86dba2; }}
 
 /* =========================================================
-   채팅 폰 프레임 (화면 2 — 04 §2)
+   채팅 폰 프레임 (화면 2) — 규격 완전 고정 {PHONE_W}x{PHONE_H}
    ========================================================= */
-.st-key-chat_phone {
-  width: 434px; margin: 0 auto; background: #F9F7F1;
-  border: 10px solid #1f1f1f; border-radius: 44px;
+.st-key-chat_phone {{
+  width: {PHONE_W}px; margin: 12px auto 0;
+  height: {PHONE_H}px !important; flex: 0 0 auto !important;
+  background: #FFFFFF; border: 10px solid #1f1f1f; border-radius: 44px;
   box-shadow: 0 18px 44px rgba(0,0,0,.22);
-  padding: 0 10px 12px; gap: 0.4rem; overflow: hidden;
-}
+  padding: 0 10px 12px; gap: 0.35rem; overflow: hidden;
+}}
+/* 메시지 영역만 남는 높이를 전부 차지한다 (프레임 규격 고정의 핵심) */
+.st-key-chat_phone > div[data-testid="stLayoutWrapper"]:has(> .st-key-chat_scroll) {{
+  flex: 1 1 0 !important; height: auto !important; min-height: 0 !important;
+}}
+.st-key-chat_scroll {{
+  height: 100% !important; min-height: 0 !important; border: none !important;
+}}
+.st-key-chat_scroll > div {{ border: none !important; }}
 
-/* 대화 헤더 */
-.chatbar { margin: 0 -10px; }
-.chatbar .phone-notch { margin-bottom: -14px; }
-.chatbar .cb-row {
+/* 대화 헤더 (iMessage 톤) */
+.chatbar {{ margin: 0 -10px; flex: 0 0 auto; }}
+.chatbar .phone-notch {{ margin-bottom: -14px; }}
+.chatbar .cb-row {{
   display: flex; align-items: center; gap: 10px;
-  background: #fff; padding: 20px 16px 10px; border-bottom: 1px solid #EEE8DB;
-}
-.chatbar .cb-back { font-size: 1.5rem; color: #8a8272; font-weight: 300; line-height: 1; }
-.chatbar .cb-avatar {
-  width: 38px; height: 38px; border-radius: 50%; flex: 0 0 38px;
+  background: #fff; padding: 22px 16px 8px; border-bottom: none;
+}}
+.chatbar .cb-back {{ font-size: 1.5rem; color: #0A84FF; font-weight: 300; line-height: 1; }}
+.chatbar .cb-avatar {{
+  width: 36px; height: 36px; border-radius: 50%; flex: 0 0 36px;
   background: linear-gradient(135deg, #FFCC00, #FFE066);
-  display: flex; align-items: center; justify-content: center; font-size: 20px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.12);
-}
-.chatbar .cb-title { font-weight: 800; font-size: 0.98rem; color: #3a352a; line-height: 1.25; }
-.chatbar .cb-title small { font-weight: 600; font-size: 0.72rem; color: #47a56b; }
-.chatbar .cb-sub {
-  background: #FFFBEB; border-bottom: 1px solid #F5E6A8;
-  padding: 6px 16px; font-size: 0.74rem; color: #7a6c2a;
-}
-.chatbar .cb-sub b { color: #5a4a00; }
+  display: flex; align-items: center; justify-content: center; font-size: 19px;
+}}
+.chatbar .cb-title {{ font-weight: 700; font-size: 0.95rem; color: #1c1c1e; line-height: 1.25; }}
+.chatbar .cb-title small {{ font-weight: 500; font-size: 0.7rem; color: #34C759; }}
+.chatbar .cb-sub {{
+  background: #fff; border-bottom: 1px solid #ECECEE;
+  padding: 2px 16px 8px; font-size: 0.72rem; color: #8E8E93;
+}}
+.chatbar .cb-sub b {{ color: #48484A; font-weight: 600; }}
 
-/* 스크롤 메시지 영역 — 컨테이너 기본 테두리 제거 */
-.st-key-chat_scroll, .st-key-chat_scroll > div { border: none !important; }
-[data-testid="stVerticalBlockBorderWrapper"].st-key-chat_scroll { border: none !important; }
-
-/* ---- 말풍선 ---- */
-.msg-row { display: flex; margin: 10px 0; align-items: flex-end; }
-.msg-row.user { justify-content: flex-end; }
-.msg-row .avatar {
-  flex: 0 0 30px; width: 30px; height: 30px; border-radius: 50%;
-  background: linear-gradient(135deg, #FFCC00, #FFE066);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; margin-right: 7px; box-shadow: 0 2px 6px rgba(0,0,0,.12);
-}
-.bubble {
-  max-width: 82%; padding: 10px 14px; border-radius: 16px;
-  font-size: 0.88rem; line-height: 1.65; word-break: keep-all;
-}
-.bubble.bot {
-  background: #fff; border: 1px solid #EDE7D9; color: #3a352a;
-  border-radius: 3px 16px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
-}
-.bubble.user {
-  background: #FFCC00; color: #3d3200; font-weight: 600;
-  border-radius: 16px 3px 16px 16px; box-shadow: 0 2px 8px rgba(0,0,0,.08);
-}
-.bubble .cursor { opacity: .65; animation: blink 0.9s infinite; }
-@keyframes blink { 50% { opacity: 0; } }
+/* ---- 말풍선 (iMessage 톤) ---- */
+.msg-row {{ display: flex; margin: 8px 0; }}
+.msg-row.user {{ justify-content: flex-end; }}
+.bubble {{
+  max-width: 80%; padding: 9px 14px; border-radius: 18px;
+  font-size: 0.9rem; line-height: 1.6; word-break: keep-all;
+}}
+.bubble.bot {{
+  background: #F1F1F3; color: #1c1c1e; border-radius: 18px 18px 18px 4px;
+}}
+.bubble.user {{
+  background: #0A84FF; color: #fff; border-radius: 18px 18px 4px 18px;
+}}
+.bubble .cursor {{ opacity: .65; animation: blink 0.9s infinite; }}
+@keyframes blink {{ 50% {{ opacity: 0; }} }}
 
 /* ---- 타이핑 인디케이터 ---- */
-.typing { display: flex; align-items: center; }
-.typing .dots { display: inline-flex; margin-right: 9px; }
-.typing .dots i {
-  width: 7px; height: 7px; background: #d4c98f; border-radius: 50%;
+.typing {{ display: flex; align-items: center; }}
+.typing .dots {{ display: inline-flex; margin-right: 9px; }}
+.typing .dots i {{
+  width: 7px; height: 7px; background: #B5B5BA; border-radius: 50%;
   display: inline-block; margin-right: 4px; animation: bounce 1.15s infinite;
-}
-.typing .dots i:nth-child(2) { animation-delay: .15s; }
-.typing .dots i:nth-child(3) { animation-delay: .3s; }
-@keyframes bounce { 0%,80%,100% { transform: translateY(0); } 40% { transform: translateY(-5px); } }
-.typing .nlabel { color: #8a8272; font-size: 0.82rem; }
+}}
+.typing .dots i:nth-child(2) {{ animation-delay: .15s; }}
+.typing .dots i:nth-child(3) {{ animation-delay: .3s; }}
+@keyframes bounce {{ 0%,80%,100% {{ transform: translateY(0); }} 40% {{ transform: translateY(-5px); }} }}
+.typing .nlabel {{ color: #8E8E93; font-size: 0.82rem; }}
 
-/* ---- 현재 탐색 기준 칩바 (04 §4-2) ---- */
-.cond-bar {
-  background: #fff; border: 1px dashed #D9D2C0; border-radius: 10px;
-  padding: 5px 10px; font-size: 0.75rem;
-}
-.cond-bar .cond-title { color: #8a8272; font-weight: 700; margin-right: 6px; }
-.cond-chip {
-  display: inline-block; background: #F6F4EE; border: 1px solid #E0D9C8;
-  border-radius: 999px; padding: 1px 9px; margin: 1px 2px; color: #4a4437;
-}
+/* ---- 현재 탐색 기준 칩바 (04 §4-2) — 항상 자리 예약(규격 고정) ---- */
+.cond-bar {{
+  background: #F7F7F9; border-radius: 10px; padding: 5px 10px;
+  font-size: 0.74rem; height: 32px; overflow: hidden; white-space: nowrap;
+  flex: 0 0 auto;
+}}
+.cond-bar.empty {{ visibility: hidden; }}
+.cond-bar .cond-title {{ color: #8E8E93; font-weight: 600; margin-right: 6px; }}
+.cond-chip {{
+  display: inline-block; background: #fff; border: 1px solid #E3E3E8;
+  border-radius: 999px; padding: 1px 9px; margin: 0 2px; color: #48484A;
+}}
 
-/* ---- 후속 칩(빠른 시작) — st.pills ---- */
-div[class*="st-key-chips_"] button {
-  border-radius: 999px !important; background: #fff; border: 1px solid #E4DCC8;
-  color: #5a4a00 !important; font-size: 0.78rem; padding: 3px 12px; min-height: 0;
-  box-shadow: 0 1px 4px rgba(0,0,0,.04);
-}
-div[class*="st-key-chips_"] button:hover {
-  border-color: #FFCC00; background: #FFFBEB;
-}
-div[class*="st-key-chips_"] button p { font-size: 0.78rem !important; }
+/* ---- 후속 칩(빠른 시작) — 대화 흐름 안, 세로 스택 pill ---- */
+div[class*="st-key-chip_"] {{ margin: 0; }}
+div[class*="st-key-chip_"] button {{
+  border-radius: 999px !important; background: #fff; border: 1px solid #D9D9DE;
+  color: #0A84FF !important; font-size: 0.78rem; padding: 3px 14px; min-height: 0;
+  white-space: normal; line-height: 1.4; text-align: left;
+}}
+div[class*="st-key-chip_"] button:hover {{
+  border-color: #0A84FF; background: #F0F7FF;
+}}
+div[class*="st-key-chip_"] button p {{ font-size: 0.78rem !important; color: #0A84FF; }}
 
-/* ---- 입력창 (프레임 하단 인라인) ---- */
-.st-key-chat_phone [data-testid="stChatInput"] {
-  background: #fff; border: 1px solid #E4DCC8; border-radius: 24px;
-}
-.st-key-chat_phone [data-testid="stChatInput"]:focus-within { border-color: #FFCC00; }
+/* ---- 입력창 (프레임 하단 고정) ---- */
+.st-key-chat_phone [data-testid="stChatInput"] {{
+  background: #F1F1F3; border: 1px solid #E3E3E8; border-radius: 22px;
+}}
+.st-key-chat_phone [data-testid="stChatInput"]:focus-within {{ border-color: #0A84FF; }}
 
 /* =========================================================
-   스마트폰 프레임 (화면 1 — 04 §2)
+   스마트폰 프레임 (화면 1) — 동일 규격 {PHONE_W}x{PHONE_H}
    ========================================================= */
-.st-key-phone_zone { position: relative; width: 410px; margin: 0 auto; }
-.phone-frame {
-  width: 410px; border: 10px solid #1f1f1f; border-radius: 44px;
+.st-key-phone_zone {{ position: relative; width: {PHONE_W}px; margin: 12px auto 0; }}
+.phone-frame {{
+  width: {PHONE_W}px; height: {PHONE_H}px; border: 10px solid #1f1f1f; border-radius: 44px;
   overflow: hidden; background: #F7F5F0; box-shadow: 0 18px 44px rgba(0,0,0,.22);
-}
-.phone-notch {
+  display: flex; flex-direction: column;
+}}
+.phone-notch {{
   width: 130px; height: 22px; background: #1f1f1f; border-radius: 0 0 14px 14px;
-  margin: 0 auto; position: relative; z-index: 2;
-}
-.phone-screen { min-height: 700px; padding: 10px 16px 70px; }
-.phone-screen.capture { padding: 0; min-height: auto; margin-top: -22px; }
-.phone-screen img.submain { width: 100%; display: block; }
+  margin: 0 auto; position: relative; z-index: 2; flex: 0 0 auto;
+}}
+.phone-screen {{ flex: 1 1 0; min-height: 0; padding: 10px 16px; overflow: hidden; }}
+.phone-screen.capture {{ padding: 0; margin-top: -22px; }}
+.phone-screen img.submain {{
+  width: 100%; height: 100%; display: block;
+  object-fit: cover; object-position: top;
+}}
 
-.pf-appbar {
+.pf-appbar {{
   display: flex; justify-content: space-between; align-items: center;
   font-weight: 800; font-size: 1.05rem; color: #333; padding: 8px 2px 12px;
-}
-.pf-banner {
+}}
+.pf-banner {{
   background: linear-gradient(120deg, #FFCC00, #FFE066); border-radius: 14px;
   padding: 16px; font-weight: 700; color: #4a3f00; margin-bottom: 12px;
-}
-.pf-banner small { font-weight: 500; color: #6b5d10; }
-.pf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
-.pf-menu {
+}}
+.pf-banner small {{ font-weight: 500; color: #6b5d10; }}
+.pf-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }}
+.pf-menu {{
   background: #fff; border: 1px solid #ECE7DB; border-radius: 12px;
   padding: 14px 12px; font-size: 0.88rem; font-weight: 600; color: #4a4437;
-}
-.pf-list-title { font-size: 0.8rem; color: #8a8272; font-weight: 700; margin: 6px 2px; }
-.pf-item {
+}}
+.pf-list-title {{ font-size: 0.8rem; color: #8a8272; font-weight: 700; margin: 6px 2px; }}
+.pf-item {{
   background: #fff; border: 1px solid #ECE7DB; border-radius: 10px;
   padding: 10px 12px; font-size: 0.84rem; color: #4a4437; margin-bottom: 6px;
   display: flex; justify-content: space-between;
-}
-.pf-item span { color: #b0a890; font-size: 0.75rem; }
-.pf-caption { text-align: center; color: #9a927e; font-size: 0.72rem; padding: 10px 0 2px; }
+}}
+.pf-item span {{ color: #b0a890; font-size: 0.75rem; }}
+.pf-caption {{
+  text-align: center; color: #9a927e; font-size: 0.72rem; padding: 8px 0;
+  flex: 0 0 auto; background: #fff;
+}}
 
 /* ---- 플로팅 버튼 + 말풍선 ---- */
-.fab-bubble {
-  position: absolute; right: 14px; bottom: 118px; z-index: 5;
+.fab-bubble {{
+  position: absolute; right: 14px; bottom: 128px; z-index: 5;
   background: #fff; border: 1px solid #E0D9C8; border-radius: 14px 14px 2px 14px;
   padding: 8px 12px; font-size: 0.8rem; color: #4a4437;
   box-shadow: 0 4px 14px rgba(0,0,0,.12); max-width: 230px;
-}
-.st-key-ai_fab { position: absolute; right: 14px; bottom: 58px; width: auto; z-index: 6; }
-.st-key-ai_fab button {
+}}
+.st-key-ai_fab {{ position: absolute; right: 14px; bottom: 68px; width: auto; z-index: 6; }}
+.st-key-ai_fab button {{
   border-radius: 999px; background: #FFCC00; color: #3d3200; font-weight: 800;
   border: none; padding: 10px 18px; box-shadow: 0 6px 18px rgba(0,0,0,.25);
-}
-.st-key-ai_fab button:hover { background: #ffd83d; color: #3d3200; }
+}}
+.st-key-ai_fab button:hover {{ background: #ffd83d; color: #3d3200; }}
 </style>
 """
 

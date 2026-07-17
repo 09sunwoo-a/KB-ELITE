@@ -223,17 +223,13 @@ def bubble_html(role: str, text: str, cursor: bool = False) -> str:
     safe = html_mod.escape(text).replace("\n", "<br>")
     if cursor:
         safe += '<span class="cursor">▌</span>'
-    if role == "user":
-        return f'<div class="msg-row user"><div class="bubble user">{safe}</div></div>'
-    return (
-        '<div class="msg-row bot"><div class="avatar">🧭</div>'
-        f'<div class="bubble bot">{safe}</div></div>'
-    )
+    kind = "user" if role == "user" else "bot"
+    return f'<div class="msg-row {kind}"><div class="bubble {kind}">{safe}</div></div>'
 
 
 def typing_html(label: str) -> str:
     return (
-        '<div class="msg-row bot"><div class="avatar">🧭</div>'
+        '<div class="msg-row bot">'
         '<div class="bubble bot typing"><span class="dots"><i></i><i></i><i></i></span>'
         f'<span class="nlabel">{html_mod.escape(label)}…</span></div></div>'
     )
@@ -260,6 +256,7 @@ def chatbar_html() -> str:
 
 
 def render_condition_bar():
+    """조건이 없으면 내용은 숨기되 자리는 유지한다(프레임 규격 고정)."""
     conds = st.session_state.conditions
     chips = []
     for key, value in conds.items():
@@ -267,11 +264,11 @@ def render_condition_bar():
         label = fmt(value) if fmt else f"{key}: {value}"
         if label:
             chips.append(f'<span class="cond-chip">{label}</span>')
-    if chips:
-        st.markdown(
-            f'<div class="cond-bar"><span class="cond-title">현재 탐색 기준</span>{"".join(chips)}</div>',
-            unsafe_allow_html=True,
-        )
+    empty = "" if chips else " empty"
+    st.markdown(
+        f'<div class="cond-bar{empty}"><span class="cond-title">현재 탐색 기준</span>{"".join(chips)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_result_placeholders(result):
@@ -295,13 +292,10 @@ def render_chips(message, msg_idx):
     chips = message.get("chips") or []
     if not chips:
         return
-    selected = st.pills(
-        "빠른 시작", chips, selection_mode="single",
-        key=f"chips_{msg_idx}", label_visibility="collapsed",
-    )
-    if selected:
-        st.session_state.pending_prompt = selected
-        st.rerun()
+    for i, chip in enumerate(chips):
+        if st.button(chip, key=f"chip_{msg_idx}_{i}"):
+            st.session_state.pending_prompt = chip
+            st.rerun()
 
 
 def run_turn(scroll_area, prompt):
@@ -394,11 +388,9 @@ def render_chat():
                     st.markdown(bubble_html(msg["role"], msg["content"]), unsafe_allow_html=True)
                     if msg["role"] == "assistant":
                         render_result_placeholders(msg.get("result"))
-
-            # 빠른 시작/후속 칩 — 입력창 위 (진행 중이면 숨김)
-            messages = st.session_state.messages
-            if messages and messages[-1]["role"] == "assistant" and not prompt:
-                render_chips(messages[-1], len(messages) - 1)
+                # 빠른 시작/후속 칩 — 대화 흐름 안, 마지막 말풍선 아래 (진행 중이면 숨김)
+                if messages and messages[-1]["role"] == "assistant" and not prompt:
+                    render_chips(messages[-1], len(messages) - 1)
 
             typed = st.chat_input("궁금한 점을 편하게 물어보세요")
             if typed:
