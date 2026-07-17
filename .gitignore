@@ -1,0 +1,19 @@
+# 환경·비밀
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / 편집기 임시파일
+.DS_Store
+~$*.xlsx
+
+# 개인 문서 (커밋 제외)
+이선우_3901317*.pdf
+
+# 빌드 산출물 (재생성 가능 — 필요 시 주석 해제하여 포함)
+data/embeddings.npy
