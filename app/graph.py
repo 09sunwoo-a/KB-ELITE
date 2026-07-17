@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import operator
+import re
 import warnings
 from typing import Annotated, TypedDict
 
@@ -147,11 +148,27 @@ def explain_node(state: ExploreState):
                 entry, best_len = t, len(key)
     context = {"용어사전": entry} if entry else \
         {"용어사전": None, "안내": "사전에 없음 — 일반적인 설명임을 밝힐 것"}
+    # 직전 후보에 대한 비용 질문이면 원 단위 환산을 계산해 제공 (01 4-6, A 대본)
+    cost_note = None
+    cands = state.get("last_candidates", [])
+    if cands and re.search(r"비용|수수료|보수", _last_user_message(state)):
+        idx = (route.get("compare_targets") or [1])[0]
+        card = cands[min(idx, len(cands)) - 1]
+        contrib = state["profile"].get("investment_context", {}).get("contribution", {})
+        if contrib.get("amount"):
+            cost_note = calc_annual_cost(card["fee_pct"], contrib["amount"],
+                                         contrib.get("type", "lumpsum"))
+            context["대상후보"] = {"순번": idx, "이름": card["name"],
+                                "연간 총보수(%)": card["fee_pct"], "기준일": card["as_of"]}
+            context["안내"] = "비용 개념만 짧게 설명하라. 원 단위 계산은 시스템이 별도로 붙인다."
     answer = _generate(state, prompts.EXPLAIN_INSTRUCTION, context)
+    if cost_note:  # 03 §6: 계산 문자열은 LLM 재서술 없이 코드가 그대로 삽입
+        answer += "\n\n" + cost_note
     return {
         "draft_answer": answer,
         "turn": {"explained_term": entry["term"] if entry else None,
-                 "explain_chip": (entry or {}).get("explore_chip")},
+                 "explain_chip": (entry or {}).get("explore_chip"),
+                 "numeric_note": (cost_note or "") + f" {card['fee_pct']}" if cost_note else None},
         "explained_terms": [entry["term"]] if entry else [],
         "trace": [_t("explain", "tool",
                      f"용어 사전 매칭: {entry['term'] if entry else '없음(일반 지식)'}",
@@ -198,8 +215,9 @@ def search_node(state: ExploreState):
     if cards and conditions.get("cost_sensitive") and contrib.get("amount"):
         cost_note = calc_annual_cost(
             cards[0]["fee_pct"], contrib["amount"], contrib.get("type", "lumpsum"))
-        context["비용환산(그대로 인용할 것)"] = cost_note
     answer = _generate(state, prompts.SEARCH_INSTRUCTION, context)
+    if cost_note:  # 03 §6: 계산 문자열은 LLM 재서술 없이 코드가 그대로 삽입
+        answer += "\n\n1번 후보 기준 비용 참고: " + cost_note
     trace = [_t("search", "tool",
                 f"search_funds: 풀 {result['pool_size']}건 → 후보 {len(cards)}개"
                 + (f", 성향 초과 {result['excluded_by_risk']}건 제외" if result["excluded_by_risk"] else "")
