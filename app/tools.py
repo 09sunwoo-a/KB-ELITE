@@ -50,6 +50,22 @@ def _resolve_alias_key(word: str) -> str | None:
     return None
 
 
+def _resolve_stock_list(text: str | None) -> list[str]:
+    """'테슬라랑 엔비디아', '테슬라, 엔비디아' 같은 복수 종목 표기를 alias 키 목록으로."""
+    if not text:
+        return []
+    whole = _resolve_alias_key(text)
+    if whole:
+        return [whole]
+    keys = []
+    for tok in re.split(r"[,·/&]|\s+", text):
+        tok = re.sub(r"(이랑|랑|하고|와|과|도)$", "", tok.strip())
+        key = _resolve_alias_key(tok)
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
 def _fund_text(f: dict) -> str:
     return " ".join(filter(None, [f["name"], f["one_liner"], f["features"]]))
 
@@ -63,10 +79,10 @@ def _theme_match(theme: str, f: dict) -> bool:
     return theme.upper() in text.upper()
 
 
-def _make_card(code: str, f: dict, reasons: list[str], target_stock: str | None) -> dict:
+def _make_card(code: str, f: dict, reasons: list[str], target_stocks: list[str]) -> dict:
     """04 §6-3 후보 카드 — funds.json 필드만 사용, selection_reason은 코드 생성."""
-    matched = [target_stock] if target_stock and target_stock in f["matched_aliases"] \
-        else f["matched_aliases"][:3]
+    matched = [s for s in target_stocks if s in f["matched_aliases"]] \
+        or f["matched_aliases"][:3]
     return {
         "fund_code": code,
         "name": f["name"],
@@ -84,7 +100,11 @@ def _make_card(code: str, f: dict, reasons: list[str], target_stock: str | None)
 def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int = 3) -> dict:
     """반환: {candidates, excluded_by_risk, blocked, pool_size, ranking_mode, applied}"""
     funds = store.funds()
-    target_stock = _resolve_alias_key(conditions.get("target_stock"))
+    target_stocks = _resolve_stock_list(conditions.get("target_stock"))
+    # alias로 풀리지 않는 종목(예: 비트코인)은 조용히 버리지 않고 테마 키워드로 취급 —
+    # 데이터에 없으면 0건으로 정직하게 떨어진다
+    unresolved_stock = conditions.get("target_stock") if (
+        conditions.get("target_stock") and not target_stocks) else None
     region_theme = conditions.get("region_theme")
     fund_type_hint = conditions.get("fund_type_hint") or ""
     cost_sensitive = bool(conditions.get("cost_sensitive"))
@@ -99,14 +119,19 @@ def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int 
         {f["fund_type"] for f in funds.values()} else None
 
     applied = [x for x, on in [
-        (f"종목: {target_stock}", target_stock), (f"지역: {region}", region),
+        (f"종목: {', '.join(target_stocks)}", target_stocks),
+        (f"종목(별칭 미등록, 키워드 검색): {unresolved_stock}", unresolved_stock),
+        (f"지역: {region}", region),
         (f"테마: {theme_kw}", theme_kw and not want_tdf and not want_pension),
         ("월지급·인컴", want_income), ("TDF", want_tdf), ("연금 적격", want_pension),
         (f"유형: {direct_type}", direct_type), ("비용 낮은 순", cost_sensitive)] if on]
 
     pool, excluded_by_risk = [], 0
     for code, f in funds.items():
-        if target_stock and target_stock not in f["matched_aliases"]:
+        if target_stocks and not all(s in f["matched_aliases"] for s in target_stocks):
+            continue
+        if unresolved_stock and not _theme_match(unresolved_stock, f) \
+                and unresolved_stock.upper() not in (f["stocks_raw"] or "").upper():
             continue
         if region and f["region"] != region:
             continue
@@ -144,8 +169,8 @@ def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int 
     for rank, code in enumerate(ranked[:k]):
         f = funds[code]
         reasons = []
-        if target_stock:
-            reasons.append(f"{target_stock}를 주요 종목으로 담고 있음")
+        if target_stocks:
+            reasons.append(f"{', '.join(target_stocks)}를 주요 종목으로 담고 있음")
         if want_tdf and f["tags"]["tdf_vintage"]:
             reasons.append(f"목표 시점 {f['tags']['tdf_vintage']}년 상품")
         if want_pension:
@@ -158,7 +183,7 @@ def search_funds(conditions: dict, max_risk_score: int, query_text: str, k: int 
             reasons.append("전체 상품 중 연간 비용이 낮은 편")
         if f["risk_score"] <= 2:
             reasons.append("가격 변동이 상대적으로 작은 편")
-        candidates.append(_make_card(code, f, reasons, target_stock))
+        candidates.append(_make_card(code, f, reasons, target_stocks))
 
     return {"candidates": candidates, "excluded_by_risk": excluded_by_risk,
             "blocked": blocked, "pool_size": len(pool),

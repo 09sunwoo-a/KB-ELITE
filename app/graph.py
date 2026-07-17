@@ -112,14 +112,23 @@ def _generate(state, instruction: str, context: dict) -> str:
 # ── 노드 ────────────────────────────────────────────────────────────
 
 def router_node(state: ExploreState):
+    user_message = _last_user_message(state)
+    prev_turn = state.get("turn") or {}
     result, overrides = route_turn(
-        _last_user_message(state),
+        user_message,
         conditions=state.get("conditions", {}),
         ask_streak=state.get("ask_streak", 0),
         last_candidates=state.get("last_candidates", []),
         history_text=_history_text(state),
     )
     conditions = merged_conditions(state.get("conditions", {}), result)
+    # 차단 직후 '가입 가능한 범위에서 찾아보기' — 차단을 유발한 테마·종목 조건을 해제하고 넓게 검색
+    if (prev_turn.get("risk_block") or {}).get("blocked") and "가입 가능한 범위" in user_message:
+        for key in ("region_theme", "target_stock", "fund_type_hint"):
+            conditions.pop(key, None)
+        result.action = "search"
+        result.action_reason = "가입 가능한 위험등급 범위 안에서 넓게 후보를 찾아볼게요."
+        overrides.append("blocked 대안 칩 → 차단 유발 조건 해제 후 search")
     dump = result.model_dump()
     extracted = {k: v for k, v in dump.items()
                  if v not in (None, False, [], "") and not k.startswith("action")}
@@ -307,6 +316,8 @@ def postprocess_node(state: ExploreState):
         chips = ["1번 자세히 보기",
                  f"1번과 {len(cands)}번 비교하기" if len(cands) >= 2 else "조건 바꿔서 다시 찾기",
                  "보유상품과 겹침 확인하기" if has_holdings else "조건 바꿔서 다시 찾기"]
+    elif action == "search":  # 검색 0건 (차단 아님) — 조건 완화 제안 (04 §8)
+        chips = ["관련 테마로 넓혀 찾아보기", "조건 다시 정하기", "전체에서 넓게 찾아보기"]
     elif action == "explain":
         # 설명한 용어와 연계된 탐색 칩 (terms.json explore_chip, 없으면 일반 칩)
         chips = [turn.get("explain_chip") or "관련 상품 살펴보기",
